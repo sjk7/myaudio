@@ -63,9 +63,8 @@ private:
       }
 
     } catch (std::runtime_error &e) {
-      std::cerr
-          << "Failed to instantiate an instance of the backend using hostApi: "
-          << sname << std::endl;
+        std::cerr << "Failed to instantiate an instance of the backend using hostApi: " << sname
+                  << ", with error: " << e.what() << std::endl;
     }
   }
   void enum_all() {

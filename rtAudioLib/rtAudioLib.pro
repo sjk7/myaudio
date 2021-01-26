@@ -17,11 +17,20 @@ linux{
 
 }
 
+contains(QT_ARCH, i386) {
+    message("32-bit")
+} else {
+    message("64-bit")
+}
+
 win32{
+
+DEFINES += __WINDOWS_DS__ \
+            __RT_DUMMY__ \
+            __WINDOWS_WASAPI__
+
     # NOTE: I suggest using MSVC compiler inside QtCreator on 'Doze. Not Mingw.
-    DEFINES += __WINDOWS_DS__ \
-                __RT_DUMMY__
-                __WINDOWS_WASAPI__ \
+
                 #__WINDOWS_ASIO__
                 # uncomment the above lines if you have the Steinberg SDK and _really_ want ASIO
                 # (remember, it has SEVERE limitations, like you can only open ONE ASIO device

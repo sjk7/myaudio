@@ -19,7 +19,7 @@ int main() {
     for (const auto &d : api.systemDevices) {
       cout << d.info.name << endl;
     }
-    cout << endl;
+    cout << endl << "----------------------------" << endl;
   }
 
   return 0;

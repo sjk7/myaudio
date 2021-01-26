@@ -4988,7 +4988,7 @@ void RtApiWasapi::wasapiThread()
 
   // convBuffer is used to store converted buffers between WASAPI and the user
   char* convBuffer = NULL;
-  unsigned int convBuffSize = 0;
+  size_t convBuffSize = 0;
   unsigned int deviceBuffSize = 0;
 
   std::string errorText;
