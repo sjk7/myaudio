@@ -1,10 +1,16 @@
 CONFIG -= qt
-CONFIG += staticlib # uncomment me if you want a shared library (a dll on 'doze)
+CONFIG += staticlib # comment me out if you want a shared library (a dll on 'doze)
 TEMPLATE = lib
+CONFIG += c++17
+QMAKE_CFLAGS += -std=c99
+
 
 unix{
-    #QMAKE_CXXFLAGS += -Wpedantic
+    # QMAKE_CXXFLAGS += -Wpedantic
     # TODO: Fix VLA in Jack integration code. Then enable -Wpedantic
+}
+macx{
+    QMAKE_CXXFLAGS += -Wpedantic
 }
 
 linux{
@@ -38,11 +44,12 @@ DEFINES += __WINDOWS_DS__ \
                 # And the below line, too. Remember to put the asio SDK files in the right place!
                 # INCLUDEPATH += "../asio"
 }
-macos{
-    DEFINES += __MACOSX_CORE__ \
-                __RT_DUMMY__
+macx{
+    DEFINES += __MACOSX_CORE__  __RTAUDIO_DUMMY__
+
+    CONFIG += sdk_no_version_check
 }
-CONFIG += c++17
+
 
 SOURCES += \
     ../rtAudio/RtAudio.cpp
