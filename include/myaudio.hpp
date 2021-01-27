@@ -51,25 +51,28 @@ deviceTypeFromInfo(const RtAudio::DeviceInfo &info)
     assert("unexpected deviceTypeFromInfo" == nullptr);
     return DeviceTypes::unknown;
 }
+
+struct HostApi;
+struct DeviceEnumerator;
 struct SystemDevice
 {
+    friend struct DeviceEnumerator;
+
     SystemDevice(const RtAudio::DeviceInfo &info, const RtAudio::Api api)
-        : info(info), api(api), m_DeviceType(deviceTypeFromInfo(info))
+        : info(info), rtapi(api), m_DeviceType(deviceTypeFromInfo(info))
     {
-        puts("constructor\n");
+        // puts("constructor\n");
     }
 
     ~SystemDevice()
     {
-        printf("SystemDevice destructor: %s\n", info.name.c_str());
-        fflush(stdout);
-        puts("\n");
     }
 
     const RtAudio::DeviceInfo info;
-    const RtAudio::Api api;
+    const RtAudio::Api rtapi;
     const DeviceTypes m_DeviceType = DeviceTypes::unknown;
     DeviceTypes deviceType() const noexcept { return m_DeviceType; }
+
     bool isInput() const noexcept
     {
         return isDeviceType(DeviceTypes::input, m_DeviceType);
@@ -82,6 +85,9 @@ struct SystemDevice
     {
         return isDeviceType(DeviceTypes::duplex, m_DeviceType);
     }
+
+  private:
+    const HostApi *hostApi = nullptr;
 };
 using SysDevList = std::vector<SystemDevice>;
 using SystemDeviceRef = std::reference_wrapper<const SystemDevice>;
@@ -114,7 +120,7 @@ static inline std::string formatsToString(const RtAudioFormat f)
     std::stringstream ss;
     ss << "Device:" << d.info.name
        << " [type=" << deviceTypeToString(d.deviceType()) << "]"
-       << ", using api: " << RtAudio::getApiDisplayName(d.api) << '\n';
+       << ", using api: " << RtAudio::getApiDisplayName(d.rtapi) << '\n';
 
     ss << "Preferred samplerate: " << d.info.preferredSampleRate << '\n'
        << "All samplerates: ";
@@ -137,7 +143,7 @@ struct HostApi
     const RtAudio::Api api;
     const std::string name;
     const std::string displayName;
-    const SysDevListRef systemDevices;
+    SysDevListRef systemDevices;
 };
 
 struct DeviceInstance
@@ -164,6 +170,15 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     ApiDevList m_apiDevs;
     ApiList m_apis;
 
+    const HostApi *findHostApi(RtAudio::Api rtapi)
+    {
+        auto ptr = std::find_if(m_apis.begin(), m_apis.end(),
+                                [&](const auto &a) { return a.api == rtapi; });
+        assert(ptr != m_apis.end());
+        if (ptr == m_apis.end()) return nullptr;
+        return &(*ptr);
+    }
+
     void clear()
     {
         m_sysDevs.clear();
@@ -181,7 +196,13 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
         rtapiList myapiList;
         RtAudio::getCompiledApi(myapiList);
         std::string sname;
+        static constexpr size_t TOTAL_MAX_DEVICES = 150;
+        // must reserve, else references to devices will be invalided.
+        const auto dev_size = sizeof(SystemDevice);
+        const auto mem_used_k = (dev_size * TOTAL_MAX_DEVICES) / 1024;
+        (void)mem_used_k;
 
+        m_sysDevs.reserve(TOTAL_MAX_DEVICES);
         try
         {
             for (const auto &a : myapiList)
@@ -189,14 +210,18 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
                 sname = RtAudio::getApiDisplayName(a);
                 RtAudio rt(a);
                 SysDevListRef refs;
-
                 SysDevList &sysDevs = this->m_sysDevs;
                 for (auto i = 0u; i < rt.getDeviceCount(); ++i)
                 {
                     const auto &info = rt.getDeviceInfo(i);
                     const auto &dsys =
                         sysDevs.emplace_back(SystemDevice{info, a});
-                    refs.emplace_back(dsys);
+                    if (sysDevs.size() >= TOTAL_MAX_DEVICES)
+                    {
+                        std::cerr << "Too Many Devices!" << std::endl;
+                        std::terminate();
+                    }
+                    refs.push_back(dsys);
                     if (info.duplexChannels > 0)
                         m_sysDevsDuplexOnly.push_back(dsys);
                     else if (info.outputChannels > 0)
@@ -206,6 +231,14 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
                 m_apis.emplace_back(
                     HostApi{a, RtAudio::getApiName(a), sname, refs});
             } // apis
+
+            // back-pointers to rich api:
+            for (auto &d : this->m_sysDevs)
+            {
+                auto *hostapi = findHostApi(d.rtapi);
+                assert(hostapi);
+                d.hostApi = hostapi;
+            }
         }
         catch (std::runtime_error &e)
         {
