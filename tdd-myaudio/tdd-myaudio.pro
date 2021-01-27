@@ -5,6 +5,8 @@ CONFIG -= qt
 
 SOURCES += \
     tddmain.cpp
+
+
 macx{CONFIG += sdk_no_version_check}
 unix{
     QMAKE_CXXFLAGS += -Wpedantic -Wall -Wodr

@@ -14,8 +14,8 @@ EQ            = =
 
 CC            = /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang
 CXX           = /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
-DEFINES       = -D__MACOSX_CORE__ -D__RT_DUMMY__
-CFLAGS        = -pipe -O2 -fPIC $(EXPORT_ARCH_ARGS) -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk -mmacosx-version-min=10.13 -Wall -Wextra $(DEFINES)
+DEFINES       = -D__MACOSX_CORE__ -D__RTAUDIO_DUMMY__
+CFLAGS        = -pipe -std=c99 -O2 -fPIC $(EXPORT_ARCH_ARGS) -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk -mmacosx-version-min=10.13 -Wall -Wextra $(DEFINES)
 CXXFLAGS      = -pipe -stdlib=libc++ -O2 -fPIC -std=gnu++1z $(EXPORT_ARCH_ARGS) -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk -mmacosx-version-min=10.13 -Wall -Wextra $(DEFINES)
 INCPATH       = -I../rtAudioLib -I. -I../../../Qt/5.15.2/clang_64/mkspecs/macx-clang
 QMAKE         = /Users/stevekerr/Qt/5.15.2/clang_64/bin/qmake
@@ -199,6 +199,7 @@ DIST          = ../../../Qt/5.15.2/clang_64/mkspecs/features/spec_pre.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/qt_config.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/macx-clang/qmake.conf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/spec_post.prf \
+		../rtAudioLib/.qmake.stash \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/exclusive_builds.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/mac/sdk.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/toolchain.prf \
@@ -392,6 +393,7 @@ Makefile: ../rtAudioLib/rtAudioLib.pro ../../../Qt/5.15.2/clang_64/mkspecs/macx-
 		../../../Qt/5.15.2/clang_64/mkspecs/features/qt_config.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/macx-clang/qmake.conf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/spec_post.prf \
+		.qmake.stash \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/exclusive_builds.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/mac/sdk.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/toolchain.prf \
@@ -563,6 +565,7 @@ Makefile: ../rtAudioLib/rtAudioLib.pro ../../../Qt/5.15.2/clang_64/mkspecs/macx-
 ../../../Qt/5.15.2/clang_64/mkspecs/features/qt_config.prf:
 ../../../Qt/5.15.2/clang_64/mkspecs/macx-clang/qmake.conf:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/spec_post.prf:
+.qmake.stash:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/exclusive_builds.prf:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/mac/sdk.prf:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/toolchain.prf:
@@ -608,6 +611,7 @@ clean: compiler_clean
 
 distclean: clean 
 	-$(DEL_FILE) $(TARGET) 
+	-$(DEL_FILE) .qmake.stash
 	-$(DEL_FILE) Makefile
 
 

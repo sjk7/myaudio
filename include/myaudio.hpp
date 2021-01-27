@@ -5,6 +5,13 @@
 #include <vector>
 namespace audio
 {
+
+template <typename T> struct no_copy
+{
+    no_copy() = default;
+    no_copy(const no_copy &rhs) = delete;
+    no_copy &operator=(const no_copy &rhs) = delete;
+};
 enum class DeviceTypes : unsigned int
 {
     unknown = 0,
@@ -69,6 +76,29 @@ struct SystemDevice
 using SysDevList = std::vector<SystemDevice>;
 using SystemDeviceRef = std::reference_wrapper<const SystemDevice>;
 using SysDevListRef = std::vector<SystemDeviceRef>;
+/*/
+     * typedef unsigned long RtAudioFormat;
+static const RtAudioFormat RTAUDIO_SINT8 = 0x1;  // 8-bit signed integer.
+static const RtAudioFormat RTAUDIO_SINT16 = 0x2; // 16-bit signed integer.
+static const RtAudioFormat RTAUDIO_SINT24 = 0x4; // 24-bit signed integer.
+static const RtAudioFormat RTAUDIO_SINT32 = 0x8; // 32-bit signed integer.
+static const RtAudioFormat RTAUDIO_FLOAT32 =
+    0x10; // Normalized between plus/minus 1.0.
+static const RtAudioFormat RTAUDIO_FLOAT64 =
+    0x20; // Normalized between plus/minus 1.0.
+/*/
+static inline std::string formatsToString(const RtAudioFormat f)
+{
+    std::string ret;
+    if (f & RTAUDIO_SINT8) ret += "Signed 8-bit integer\t";
+    if (f & RTAUDIO_SINT16) ret += "Signed 16-bit integer\t";
+    if (f & RTAUDIO_SINT24) ret += "Signed 24-bit integer\t";
+    if (f & RTAUDIO_SINT32) ret += "Signed 32-bit integer\t";
+    if (f & RTAUDIO_FLOAT32) ret += "Signed 32-bit float\t";
+    if (f & RTAUDIO_FLOAT64) ret += "Signed 64-bit float\t";
+    return ret;
+}
+
 [[maybe_unused]] std::string deviceToString(const SystemDevice &d)
 {
     std::stringstream ss;
@@ -82,8 +112,13 @@ using SysDevListRef = std::vector<SystemDeviceRef>;
     {
         ss << '|' << sr;
     }
-    ss << '\n' << '\n';
+
+    ss << "\nSupported bit depth formats: ";
+    const std::string fmts{formatsToString(d.info.nativeFormats)};
+    ss << fmts << std::endl;
+
     std::string ret{ss.str()};
+    ss << '\n' << '\n';
     return ret;
 }
 
@@ -108,7 +143,7 @@ struct DeviceInstance
 using ApiDevList = std::vector<DeviceInstance>;
 using ApiList = std::vector<HostApi>;
 
-struct DeviceEnumerator
+struct DeviceEnumerator : public no_copy<DeviceEnumerator>
 {
   public:
   private:
@@ -143,6 +178,7 @@ struct DeviceEnumerator
             {
                 sname = RtAudio::getApiDisplayName(a);
                 RtAudio rt(a);
+                SysDevListRef refs;
 
                 SysDevList &sysDevs = this->m_sysDevs;
                 for (auto i = 0u; i < rt.getDeviceCount(); ++i)
@@ -150,20 +186,16 @@ struct DeviceEnumerator
                     const auto &info = rt.getDeviceInfo(i);
                     sysDevs.emplace_back(SystemDevice{info, a});
                     auto &dsys = sysDevs.at(sysDevs.size() - 1);
-
+                    refs.push_back(dsys);
                     if (info.duplexChannels > 0)
                         m_sysDevsDuplexOnly.push_back(dsys);
                     else if (info.outputChannels > 0)
                         m_sysDevsInputOnly.push_back(dsys);
-                }
-
-                SysDevListRef refs;
-                for (auto &devref : sysDevs)
-                    refs.emplace_back(devref);
+                }; // devices
 
                 m_apis.emplace_back(
                     HostApi{a, RtAudio::getApiName(a), sname, refs});
-            }
+            } // apis
         }
         catch (std::runtime_error &e)
         {
