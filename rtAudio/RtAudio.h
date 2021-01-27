@@ -1118,7 +1118,10 @@ class RtApiDs : public RtApi
   public:
     RtApiDs();
     ~RtApiDs();
-    RtAudio::Api getCurrentApi(void) override { return RtAudio::WINDOWS_DS; }
+    RtAudio::Api getCurrentApi(void) override
+    {
+        return RtAudio::Api::WINDOWS_DS;
+    }
     unsigned int getDeviceCount(void) override;
     unsigned int getDefaultOutputDevice(void) override;
     unsigned int getDefaultInputDevice(void) override;
@@ -1160,7 +1163,7 @@ class RtApiWasapi : public RtApi
 
     RtAudio::Api getCurrentApi(void) override
     {
-        return RtAudio::WINDOWS_WASAPI;
+        return RtAudio::Api::WINDOWS_WASAPI;
     }
     unsigned int getDeviceCount(void) override;
     RtAudio::DeviceInfo getDeviceInfo(unsigned int device) override;

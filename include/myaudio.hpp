@@ -1,8 +1,10 @@
 #pragma once
 #include "../rtAudio/RtAudio.h"
 #include <array>
+#include <cassert>
 #include <functional> // std::reference_wrapper
 #include <vector>
+
 namespace audio
 {
 
@@ -54,6 +56,14 @@ struct SystemDevice
     SystemDevice(const RtAudio::DeviceInfo &info, const RtAudio::Api api)
         : info(info), api(api), m_DeviceType(deviceTypeFromInfo(info))
     {
+        puts("constructor\n");
+    }
+
+    ~SystemDevice()
+    {
+        printf("SystemDevice destructor: %s\n", info.name.c_str());
+        fflush(stdout);
+        puts("\n");
     }
 
     const RtAudio::DeviceInfo info;
@@ -184,9 +194,9 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
                 for (auto i = 0u; i < rt.getDeviceCount(); ++i)
                 {
                     const auto &info = rt.getDeviceInfo(i);
-                    sysDevs.emplace_back(SystemDevice{info, a});
-                    auto &dsys = sysDevs.at(sysDevs.size() - 1);
-                    refs.push_back(dsys);
+                    const auto &dsys =
+                        sysDevs.emplace_back(SystemDevice{info, a});
+                    refs.emplace_back(dsys);
                     if (info.duplexChannels > 0)
                         m_sysDevsDuplexOnly.push_back(dsys);
                     else if (info.outputChannels > 0)

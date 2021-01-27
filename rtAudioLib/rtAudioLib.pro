@@ -19,9 +19,9 @@ linux{
 }
 
 contains(QT_ARCH, i386) {
-    message("32-bit")
+    #message("32-bit")
 } else {
-    message("64-bit")
+    #message("64-bit")
 }
 
 win32{
