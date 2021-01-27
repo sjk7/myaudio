@@ -6,8 +6,10 @@ CONFIG -= qt
 SOURCES += \
     tddmain.cpp
 macx{CONFIG += sdk_no_version_check}
-QMAKE_CFLAGS += -std=c99
-QMAKE_CXXFLAGS += -Wpedantic
+unix{
+    QMAKE_CXXFLAGS += -Wpedantic -Wall -Wodr
+    CONFIG(release, debug | release):QMAKE_CXXFLAGS += -flto
+}
 
 win32:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Release/release/ -lrtAudiocpp
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug/debug/ -lrtAudiocpp

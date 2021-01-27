@@ -1,89 +1,201 @@
 #pragma once
 #include "../rtAudio/RtAudio.h"
-
+#include <array>
+#include <functional> // std::reference_wrapper
 #include <vector>
-struct SystemDevice {
-  const RtAudio::DeviceInfo info;
-  const RtAudio::Api api;
+namespace audio
+{
+enum class DeviceTypes : unsigned int
+{
+    unknown = 0,
+    input = 1,
+    output = 2,
+    duplex = input | output
 };
 
-namespace audio {
-struct HostApi {
-  const RtAudio::Api api;
-  const std::string name;
-  const std::string displayName;
-  const std::vector<SystemDevice> systemDevices;
+[[maybe_unused]] static inline std::string
+deviceTypeToString(const DeviceTypes dt)
+{
+    static std::array<std::string, 4> strings{"unknown", "input", "output",
+                                              "duplex"};
+    if (dt == DeviceTypes::duplex) return "duplex";
+    const auto idt = static_cast<unsigned int>(dt);
+    assert(idt > 0 && idt < strings.size() &&
+           "bad index in deviceTypeToString" != nullptr);
+    return strings.at(idt);
+}
+
+[[maybe_unused]] static inline bool
+isDeviceType(const DeviceTypes wanted, const DeviceTypes check_for) noexcept
+{
+    unsigned int uwanted = static_cast<unsigned int>(wanted);
+    unsigned int ucheck = static_cast<unsigned int>(check_for);
+    return (uwanted & ucheck) != 0;
+}
+
+[[maybe_unused]] static inline DeviceTypes
+deviceTypeFromInfo(const RtAudio::DeviceInfo &info)
+{
+    if (info.duplexChannels > 0) return DeviceTypes::duplex;
+    if (info.outputChannels > 0) return DeviceTypes::output;
+    if (info.inputChannels > 0) return DeviceTypes::input;
+    assert("unexpected deviceTypeFromInfo" == nullptr);
+    return DeviceTypes::unknown;
+}
+struct SystemDevice
+{
+    SystemDevice(const RtAudio::DeviceInfo &info, const RtAudio::Api api)
+        : info(info), api(api), m_DeviceType(deviceTypeFromInfo(info))
+    {
+    }
+
+    const RtAudio::DeviceInfo info;
+    const RtAudio::Api api;
+    const DeviceTypes m_DeviceType = DeviceTypes::unknown;
+    DeviceTypes deviceType() const noexcept { return m_DeviceType; }
+    bool isInput() const noexcept
+    {
+        return isDeviceType(DeviceTypes::input, m_DeviceType);
+    }
+    bool isOutput() const noexcept
+    {
+        return isDeviceType(DeviceTypes::output, m_DeviceType);
+    }
+    bool isDuplex() const noexcept
+    {
+        return isDeviceType(DeviceTypes::duplex, m_DeviceType);
+    }
 };
-
-struct DeviceInstance {
-private:
-  const SystemDevice &m_systemDevice;
-
-public:
-  DeviceInstance(const SystemDevice &sd) : m_systemDevice(sd) {}
-  const SystemDevice &systemDevice() const noexcept { return m_systemDevice; }
-};
-
 using SysDevList = std::vector<SystemDevice>;
+using SystemDeviceRef = std::reference_wrapper<const SystemDevice>;
+using SysDevListRef = std::vector<SystemDeviceRef>;
+[[maybe_unused]] std::string deviceToString(const SystemDevice &d)
+{
+    std::stringstream ss;
+    ss << "Device:" << d.info.name
+       << " [type=" << deviceTypeToString(d.deviceType()) << "]"
+       << ", using api: " << RtAudio::getApiDisplayName(d.api) << '\n';
+
+    ss << "Preferred samplerate: " << d.info.preferredSampleRate << '\n'
+       << "All samplerates: ";
+    for (const auto &sr : d.info.sampleRates)
+    {
+        ss << '|' << sr;
+    }
+    ss << '\n' << '\n';
+    std::string ret{ss.str()};
+    return ret;
+}
+
+struct HostApi
+{
+    const RtAudio::Api api;
+    const std::string name;
+    const std::string displayName;
+    const SysDevListRef systemDevices;
+};
+
+struct DeviceInstance
+{
+  private:
+    const SystemDevice &m_systemDevice;
+
+  public:
+    DeviceInstance(const SystemDevice &sd) : m_systemDevice(sd) {}
+    const SystemDevice &systemDevice() const noexcept { return m_systemDevice; }
+};
+
 using ApiDevList = std::vector<DeviceInstance>;
 using ApiList = std::vector<HostApi>;
 
-struct DeviceEnumerator {
-public:
-private:
-  SysDevList m_sysDevs;
-  ApiDevList m_apiDevs;
-  ApiList m_apis;
+struct DeviceEnumerator
+{
+  public:
+  private:
+    SysDevList m_sysDevs;
+    SysDevListRef m_sysDevsOutputOnly;
+    SysDevListRef m_sysDevsInputOnly;
+    SysDevListRef m_sysDevsDuplexOnly;
+    ApiDevList m_apiDevs;
+    ApiList m_apis;
 
-  void clear() {
-    m_sysDevs.clear();
-    m_apis.clear();
-    m_apiDevs.clear();
-  }
-
-  void enum_apis() {
-    m_apis.clear();
-    using rtapiList = std::vector<RtAudio::Api>;
-    rtapiList myapiList;
-    RtAudio::getCompiledApi(myapiList);
-    std::string sname;
-    m_sysDevs.clear();
-
-    try {
-      for (const auto &a : myapiList) {
-        sname = RtAudio::getApiDisplayName(a);
-        RtAudio rt(a);
-
-        SysDevList sysDevs;
-        for (auto i = 0u; i < rt.getDeviceCount(); ++i) {
-          sysDevs.emplace_back(SystemDevice{rt.getDeviceInfo(i), a});
-        }
-
-        m_apis.emplace_back(HostApi{a, RtAudio::getApiName(a), sname, sysDevs});
-      }
-
-    } catch (std::runtime_error &e) {
-        std::cerr << "Failed to instantiate an instance of the backend using hostApi: " << sname
-                  << ", with error: " << e.what() << std::endl;
+    void clear()
+    {
+        m_sysDevs.clear();
+        m_apis.clear();
+        m_apiDevs.clear();
+        m_sysDevsOutputOnly.clear();
+        m_sysDevsInputOnly.clear();
+        m_sysDevsDuplexOnly.clear();
     }
-  }
-  void enum_all() {
-    clear();
-    enum_apis();
-  }
 
-public:
-  DeviceEnumerator() { enum_all(); }
-  const ApiList &apis() const noexcept { return m_apis; }
-  const SysDevList systemDevices() const noexcept { return m_sysDevs; }
+    void enum_apis()
+    {
+        clear();
+        using rtapiList = std::vector<RtAudio::Api>;
+        rtapiList myapiList;
+        RtAudio::getCompiledApi(myapiList);
+        std::string sname;
+
+        try
+        {
+            for (const auto &a : myapiList)
+            {
+                sname = RtAudio::getApiDisplayName(a);
+                RtAudio rt(a);
+
+                SysDevList &sysDevs = this->m_sysDevs;
+                for (auto i = 0u; i < rt.getDeviceCount(); ++i)
+                {
+                    const auto &info = rt.getDeviceInfo(i);
+                    sysDevs.emplace_back(SystemDevice{info, a});
+                    auto &dsys = sysDevs.at(sysDevs.size() - 1);
+
+                    if (info.duplexChannels > 0)
+                        m_sysDevsDuplexOnly.push_back(dsys);
+                    else if (info.outputChannels > 0)
+                        m_sysDevsInputOnly.push_back(dsys);
+                }
+
+                SysDevListRef refs;
+                for (auto &devref : sysDevs)
+                    refs.emplace_back(devref);
+
+                m_apis.emplace_back(
+                    HostApi{a, RtAudio::getApiName(a), sname, refs});
+            }
+        }
+        catch (std::runtime_error &e)
+        {
+            std::cerr << "Failed to instantiate an instance of the backend "
+                         "using hostApi: "
+                      << sname << ", with error: " << e.what() << std::endl;
+        }
+    }
+    void enum_all()
+    {
+        clear();
+        enum_apis();
+    }
+
+  public:
+    DeviceEnumerator() { enum_all(); }
+    const ApiList &apis() const noexcept { return m_apis; }
+    const SysDevList systemDevices() const noexcept { return m_sysDevs; }
 };
 
-class myaudio : public RtAudio {
-  DeviceEnumerator m_enum;
+class myaudio : public RtAudio
+{
+    DeviceEnumerator m_enum;
+    std::string m_sid;
 
-public:
-  DeviceEnumerator &enumerator() { return m_enum; }
+  public:
+    myaudio(std::string_view id = "") : m_sid(id) {}
+    DeviceEnumerator &enumerator() { return m_enum; }
+    std::string_view id() const noexcept { return m_sid; }
 };
 
-namespace tests {}
+namespace tests
+{
+}
 } // namespace audio

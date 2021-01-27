@@ -4,13 +4,8 @@ TEMPLATE = lib
 CONFIG += c++17
 QMAKE_CFLAGS += -std=c99
 
-
 unix{
-    # QMAKE_CXXFLAGS += -Wpedantic
-    # TODO: Fix VLA in Jack integration code. Then enable -Wpedantic
-}
-macx{
-    QMAKE_CXXFLAGS += -Wpedantic
+    #QMAKE_CXXFLAGS += -Wpedantic -Wall -flto -Wodr -g -fno-inline
 }
 
 linux{

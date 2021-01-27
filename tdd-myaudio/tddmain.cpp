@@ -3,24 +3,32 @@
 
 using namespace std;
 
-int main() {
-  RtAudio rtaudio;
+int main()
+{
+    RtAudio rtaudio;
+    cout << "RtAudio detail: " << RtAudio::getVersion() << endl << endl;
 
-  audio::myaudio audio;
-  auto the_enumerator = audio.enumerator();
-  cout << "There are a total of: " << the_enumerator.apis().size()
-       << " host apis compiled for this system" << endl
-       << endl;
+    audio::myaudio audio;
+    auto the_enumerator = audio.enumerator();
+    cout << "There are a total of: " << the_enumerator.apis().size()
+         << " host apis compiled for this system" << endl
+         << endl;
 
-  for (const auto &api : the_enumerator.apis()) {
-      cout << "Have api, with name: " << api.name << ", and display name: " << api.displayName
-           << endl;
-      cout << "This api has " << api.systemDevices.size() << " active devices" << endl;
-      for (const auto &d : api.systemDevices) {
-          cout << d.info.name << endl;
-      }
-      cout << endl << "---------------------------------" << endl;
-  }
+    for (const auto &api : the_enumerator.apis())
+    {
+        cout << "Have api, with name: " << api.name
+             << ", and display name: " << api.displayName << endl;
+        cout << "This api has " << api.systemDevices.size()
+             << " active devices:\n"
+             << endl;
+        for (const auto &d : api.systemDevices)
+        {
+            std::string s{audio::deviceToString(d)};
+            cout << s;
+        }
+        cout << endl << "---------------------------------" << endl;
+    }
 
-  return 0;
+    cout.flush();
+    return 0;
 }
