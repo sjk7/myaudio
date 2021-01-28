@@ -58,15 +58,15 @@ struct SystemDevice
 {
     friend struct DeviceEnumerator;
 
-    SystemDevice(const RtAudio::DeviceInfo &info, const RtAudio::Api api)
-        : info(info), rtapi(api), m_DeviceType(deviceTypeFromInfo(info))
+    SystemDevice(const int deviceId, const RtAudio::DeviceInfo &info,
+                 const RtAudio::Api api)
+        : info(info), rtapi(api), m_DeviceType(deviceTypeFromInfo(info)),
+          m_DeviceId(deviceId)
     {
-        // puts("constructor\n");
     }
 
-    ~SystemDevice()
-    {
-    }
+    ~SystemDevice() {}
+    const RtAudio::DeviceInfo &deviceInfo() const noexcept { return info; }
 
     const RtAudio::DeviceInfo info;
     const RtAudio::Api rtapi;
@@ -85,10 +85,25 @@ struct SystemDevice
     {
         return isDeviceType(DeviceTypes::duplex, m_DeviceType);
     }
+    const HostApi *Host_Api() const noexcept { return hostApi; }
+    // corresponds to index in RtAudio::getDeviceCount()
+    int DeviceId() const noexcept { return m_DeviceId; }
 
   private:
+    // corresponds to index in RtAudio::getDeviceCount()
+    int m_DeviceId = -1;
     const HostApi *hostApi = nullptr;
 };
+
+struct SystemDeviceInstance
+{
+    SystemDeviceInstance(const SystemDevice &sd) : m_sysDevice(sd) {}
+    const SystemDevice &systemDevice() const { return m_sysDevice; }
+
+  private:
+    const SystemDevice &m_sysDevice;
+};
+
 using SysDevList = std::vector<SystemDevice>;
 using SystemDeviceRef = std::reference_wrapper<const SystemDevice>;
 using SysDevListRef = std::vector<SystemDeviceRef>;
@@ -143,7 +158,16 @@ struct HostApi
     const RtAudio::Api api;
     const std::string name;
     const std::string displayName;
-    SysDevListRef systemDevices;
+    HostApi(const RtAudio::Api api, std::string_view name,
+            std::string_view displayname, SysDevListRef &devices)
+        : api(api), name(name), displayName(displayname),
+          m_systemDevices(devices)
+    {
+    }
+    const SysDevListRef &systemDevices() const { return m_systemDevices; }
+
+  private:
+    SysDevListRef m_systemDevices;
 };
 
 struct DeviceInstance
@@ -152,8 +176,15 @@ struct DeviceInstance
     const SystemDevice &m_systemDevice;
 
   public:
-    DeviceInstance(const SystemDevice &sd) : m_systemDevice(sd) {}
+    DeviceInstance(const SystemDevice &sd) : m_systemDevice(sd)
+    {
+        m_StreamParams.deviceId = m_systemDevice.DeviceId();
+    }
     const SystemDevice &systemDevice() const noexcept { return m_systemDevice; }
+    RtAudio::StreamOptions m_StreamOptions = {};
+    RtAudio::StreamParameters m_StreamParams = {};
+    // corresponds to index in RtAudio::getDeviceCount()
+    int DeviceId() const { return m_systemDevice.DeviceId(); }
 };
 
 using ApiDevList = std::vector<DeviceInstance>;
@@ -162,14 +193,31 @@ using ApiList = std::vector<HostApi>;
 struct DeviceEnumerator : public no_copy<DeviceEnumerator>
 {
   public:
-  private:
-    SysDevList m_sysDevs;
-    SysDevListRef m_sysDevsOutputOnly;
-    SysDevListRef m_sysDevsInputOnly;
-    SysDevListRef m_sysDevsDuplexOnly;
-    ApiDevList m_apiDevs;
-    ApiList m_apis;
-
+    const HostApi *apiFromDisplayName(std::string_view name)
+    {
+        return findApiByDisplayName(name);
+    }
+    const HostApi *apiFromName(std::string_view name)
+    {
+        return this->findApiByName(name);
+    }
+    const SystemDevice *findDevice(const HostApi &a,
+                                   std::string_view deviceName)
+    {
+        for (const auto &d : a.systemDevices())
+        {
+            const auto &dev = d.get();
+            if (dev.deviceInfo().name == deviceName) return &dev;
+        }
+        return nullptr;
+    }
+    const SystemDevice *findDevice(std::string_view apiDisplayName,
+                                   std::string_view deviceName)
+    {
+        auto api = apiFromDisplayName(apiDisplayName);
+        if (!api) return nullptr;
+        return findDevice(*api, deviceName);
+    }
     const HostApi *findHostApi(RtAudio::Api rtapi)
     {
         auto ptr = std::find_if(m_apis.begin(), m_apis.end(),
@@ -179,14 +227,49 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
         return &(*ptr);
     }
 
+    const SysDevListRef &duplexDevices() const { return m_sysDevsDuplex; }
+    const SysDevListRef &inputDevices() const { return m_sysDevsInput; }
+    const SysDevListRef &outputDevices() const { return m_sysDevsOutput; }
+
+  private:
+    SysDevList m_sysDevs;
+    SysDevListRef m_sysDevsOutput;
+    SysDevListRef m_sysDevsInput;
+    SysDevListRef m_sysDevsDuplex;
+    ApiDevList m_apiDevs;
+    ApiList m_apis;
+    const HostApi *findApiByDisplayName(std::string_view displayName)
+    {
+
+        for (const auto &api : apis())
+        {
+            if (api.displayName == displayName)
+            {
+                return &api;
+            }
+        }
+        return nullptr; // not found
+    }
+    const HostApi *findApiByName(std::string_view name)
+    {
+        for (const auto &api : apis())
+        {
+            if (api.name == name)
+            {
+                return &api;
+            }
+        }
+        return nullptr; // not found
+    }
+
     void clear()
     {
         m_sysDevs.clear();
         m_apis.clear();
         m_apiDevs.clear();
-        m_sysDevsOutputOnly.clear();
-        m_sysDevsInputOnly.clear();
-        m_sysDevsDuplexOnly.clear();
+        m_sysDevsOutput.clear();
+        m_sysDevsInput.clear();
+        m_sysDevsDuplex.clear();
     }
 
     void enum_apis()
@@ -215,7 +298,7 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
                 {
                     const auto &info = rt.getDeviceInfo(i);
                     const auto &dsys =
-                        sysDevs.emplace_back(SystemDevice{info, a});
+                        sysDevs.emplace_back(SystemDevice(i, info, a));
                     if (sysDevs.size() >= TOTAL_MAX_DEVICES)
                     {
                         std::cerr << "Too Many Devices!" << std::endl;
@@ -223,9 +306,10 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
                     }
                     refs.push_back(dsys);
                     if (info.duplexChannels > 0)
-                        m_sysDevsDuplexOnly.push_back(dsys);
-                    else if (info.outputChannels > 0)
-                        m_sysDevsInputOnly.push_back(dsys);
+                        m_sysDevsDuplex.push_back(dsys);
+                    if (info.outputChannels > 0)
+                        m_sysDevsOutput.push_back(dsys);
+                    if (info.inputChannels > 0) m_sysDevsInput.push_back(dsys);
                 }; // devices
 
                 m_apis.emplace_back(
@@ -255,6 +339,9 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
 
   public:
     DeviceEnumerator() { enum_all(); }
+    // Care! This will invalidate any references that you may have to apis and
+    // devices.
+    void Refresh() { enum_all(); }
     const ApiList &apis() const noexcept { return m_apis; }
     const SysDevList systemDevices() const noexcept { return m_sysDevs; }
 };
@@ -266,8 +353,14 @@ class myaudio : public RtAudio
 
   public:
     myaudio(std::string_view id = "") : m_sid(id) {}
+    virtual ~myaudio() {}
     DeviceEnumerator &enumerator() { return m_enum; }
     std::string_view id() const noexcept { return m_sid; }
+    const HostApi *currentApi()
+    {
+        auto a = m_enum.findHostApi(RtAudio::getCurrentApi());
+        return a;
+    }
 };
 
 namespace tests

@@ -500,7 +500,7 @@ class RTAUDIO_DLL_PUBLIC RtAudio
     ~RtAudio();
 
     //! Returns the audio API specifier for the current instance of RtAudio.
-    RtAudio::Api getCurrentApi(void);
+    RtAudio::Api getCurrentApi(void) const;
 
     //! A public function that queries for the number of audio devices
     //! available.
@@ -954,7 +954,7 @@ class RTAUDIO_DLL_PUBLIC RtApi
 //
 // **************************************************************** //
 
-inline RtAudio::Api RtAudio ::getCurrentApi(void)
+inline RtAudio::Api RtAudio ::getCurrentApi(void) const
 {
     return rtapi_->getCurrentApi();
 }

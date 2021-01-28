@@ -1,5 +1,8 @@
 #include "../include/myaudio.hpp"
+#include <chrono>
 #include <iostream>
+#include <thread>
+using namespace std::chrono_literals;
 
 using namespace std;
 
@@ -18,19 +21,71 @@ int main()
     {
         cout << "Have api, with name: " << api.name
              << ", and display name: " << api.displayName << endl;
-        cout << "This api has " << api.systemDevices.size()
-             << " active devices:\n";
+        cout << "This api has " << api.systemDevices().size()
+             << " active devices:" << endl;
 
-        for (const auto &d : api.systemDevices)
+        for (const auto &d : api.systemDevices())
         {
-            cout << "***************************\n";
+            cout << "***************************" << endl;
             std::string s{audio::deviceToString(d)};
-            cout << s;
+            const auto &dev = d.get();
+            const auto dbak =
+                the_enumerator.findDevice(api.displayName, d.get().info.name);
+            assert(dbak && dbak->info.name == dev.info.name);
+            assert(dev.Host_Api() == &api);
+            assert(dev.Host_Api()->displayName == api.displayName);
+            assert(audio.currentApi() == &api);
+            assert(dev.deviceInfo().name == dbak->deviceInfo().name);
+            assert(dev.DeviceId() >= 0);
+            cout << "This device's global device id is: " << dev.DeviceId()
+                 << endl;
+            cout << s << endl;
         }
         cout << endl << "---------------------------------" << endl;
+        const auto found_api =
+            the_enumerator.apiFromDisplayName(api.displayName);
+        assert(found_api && found_api->displayName == api.displayName);
+        const auto found_api2 = the_enumerator.apiFromName(api.name);
+        assert(found_api2 && found_api2->name == api.name);
     }
 
     cout << "Api and device enumeration 'complet'" << endl;
+
+    cout << "Total Devices on system "
+         << audio.enumerator().systemDevices().size() << endl;
+    assert(audio.enumerator().systemDevices().size() == audio.getDeviceCount());
+
+    cout << "Duplex devices on system: "
+         << audio.enumerator().duplexDevices().size() << endl;
+    for (const auto &d : audio.enumerator().duplexDevices())
+    {
+        cout << audio::deviceToString(d) << endl;
+    }
+    cout << "---------------------------------------" << endl << endl;
+
+    cout << "Input devices on system: "
+         << audio.enumerator().inputDevices().size() << endl;
+    for (const auto &d : audio.enumerator().inputDevices())
+    {
+        cout << audio::deviceToString(d) << endl;
+    }
+    cout << "---------------------------------------" << endl << endl;
+
+    cout << "Output devices on system: "
+         << audio.enumerator().outputDevices().size() << endl;
+    for (const auto &d : audio.enumerator().outputDevices())
+    {
+        cout << audio::deviceToString(d) << endl;
+    }
+    cout << "---------------------------------------" << endl << endl;
+
     cout.flush();
+
+    cout << flush;
+    puts("Finished\n");
+    std::this_thread::sleep_for(1s); // else cout doesn't flush on macos. FFS!
+
+    fflush(stdout);
+    std::this_thread::sleep_for(1s); // else cout doesn't flush on macos. FFS!
     return 0;
 }
