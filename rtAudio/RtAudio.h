@@ -358,7 +358,10 @@ class RTAUDIO_DLL_PUBLIC RtAudio
     //! The structure for specifying input or ouput stream parameters.
     struct StreamParameters
     {
-        unsigned int deviceId; /*!< Device index (0 to getDeviceCount() - 1). */
+        static constexpr inline int BAD_DEVICE_ID = -1;
+        static constexpr unsigned int BAD_DEVICE_IDU = -1U;
+        unsigned int deviceId =
+            BAD_DEVICE_IDU; /*!< Device index (0 to getDeviceCount() - 1). */
         unsigned int nChannels; /*!< Number of channels. */
         unsigned int
             firstChannel; /*!< First channel index on device (default = 0). */
@@ -371,6 +374,7 @@ class RTAUDIO_DLL_PUBLIC RtAudio
         {
         }
         StreamParameters() = default;
+        bool isValid() const noexcept { return deviceId != BAD_DEVICE_IDU; }
     };
 
     //! The structure for specifying stream options.

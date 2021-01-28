@@ -57,9 +57,12 @@ deviceTypeFromInfo(const DeviceInfo &info)
 struct HostApi;
 struct DeviceEnumerator;
 using Api = RtAudio::Api;
+using StreamOptions = RtAudio::StreamOptions;
+using StreamParameters = RtAudio::StreamParameters;
 
 struct SystemDevice
 {
+
     friend struct DeviceEnumerator;
 
     SystemDevice(const int deviceId, const DeviceInfo &info, const Api api)
@@ -91,10 +94,14 @@ struct SystemDevice
     const HostApi *Host_Api() const noexcept { return hostApi; }
     // corresponds to index in RtAudio::getDeviceCount()
     int DeviceId() const noexcept { return m_DeviceId; }
+    bool isValid() const noexcept
+    {
+        return m_DeviceId > StreamParameters::BAD_DEVICE_ID;
+    }
 
   private:
     // corresponds to index in RtAudio::getDeviceCount()
-    int m_DeviceId = -1;
+    int m_DeviceId = StreamParameters::BAD_DEVICE_ID;
     const HostApi *hostApi = nullptr;
 };
 
@@ -164,19 +171,16 @@ struct HostApi
     SysDevListRef m_systemDevices;
 };
 
-using StreamOptions = RtAudio::StreamOptions;
-using StreamParameters = RtAudio::StreamParameters;
-
 [[maybe_unused]] static inline StreamOptions StreamOptionsDefault()
 {
     StreamOptions ret = StreamOptions(RTAUDIO_SCHEDULE_REALTIME, 1024, 0);
     return ret;
 }
-enum class Direction
+enum class Direction : unsigned int
 {
-    not_specified,
-    input,
-    output,
+    not_specified = StreamParameters::BAD_DEVICE_IDU,
+    input = 0,
+    output = 1,
     duplex = input | output
 };
 
@@ -188,10 +192,11 @@ enum class Direction
  */
 [[maybe_unused]] static inline StreamParameters
 StreamParamsDefault(const SystemDevice &sd,
-                    Direction dir = Direction::not_specified)
+                    const Direction dir = Direction::not_specified)
 {
-    auto first_channel = 0;
+    const auto first_channel = 0;
     auto def_chans = 2;
+    auto device_id = sd.DeviceId();
     if (dir == Direction::not_specified)
     {
         if (sd.isDuplex())
@@ -218,9 +223,8 @@ StreamParamsDefault(const SystemDevice &sd,
             }
             else
             {
-                throw std::runtime_error(
-                    "StreamParamsDefault: input direction requested, but the "
-                    "device is not an input device");
+                def_chans = 0;
+                device_id = StreamParameters::BAD_DEVICE_IDU;
             }
         }
         else
@@ -231,30 +235,40 @@ StreamParamsDefault(const SystemDevice &sd,
             }
             else
             {
-                throw std::runtime_error(
-                    "StreamParamsDefault: output direction requested, but the "
-                    "device is not an output device");
+                def_chans = 0;
+                device_id = StreamParameters::BAD_DEVICE_IDU;
             }
         }
     }
 
-    StreamParameters ret(sd.DeviceId(), def_chans, first_channel);
+    StreamParameters ret(device_id, def_chans, first_channel);
     return ret;
 }
+
 struct DeviceInstance
 {
     DeviceInstance(const SystemDevice &sd, StreamOptions opts = {},
-                   StreamParameters params = {})
-        : m_sysDevice(sd), m_StreamOptions(opts), m_StreamParams(params)
+                   StreamParameters inParams = {},
+                   StreamParameters outParams = {})
+        : m_sysDevice(sd), m_StreamOptions(opts)
+
     {
-        if (params.nChannels == 0)
+        m_StreamParams[0] = inParams;
+        m_StreamParams[1] = outParams;
+
+        for (int i = 0; i < 2; ++i)
         {
-            m_StreamParams = StreamParamsDefault(sd);
-        }
-        if (opts.numberOfBuffers == 0)
-        {
-            m_StreamOptions = StreamOptionsDefault();
-        }
+            auto &params = m_StreamParams[i];
+            Direction dir = static_cast<Direction>(i);
+            if (params.nChannels == 0)
+            {
+                params = StreamParamsDefault(sd, dir);
+            }
+            if (opts.numberOfBuffers == 0)
+            {
+                m_StreamOptions = StreamOptionsDefault();
+            }
+        };
     }
     const SystemDevice &systemDevice() const { return m_sysDevice; }
     // corresponds to index in RtAudio::getDeviceCount()
@@ -264,11 +278,20 @@ struct DeviceInstance
         assert(m_sysDevice.Host_Api());
         return m_sysDevice.Host_Api();
     }
+    const StreamOptions &streamOptions() const noexcept
+    {
+        return m_StreamOptions;
+    }
+    const StreamParameters &streamParameters(Direction direction) const noexcept
+    {
+        unsigned int index = static_cast<unsigned int>(direction);
+        return m_StreamParams[index];
+    }
 
   private:
     const SystemDevice &m_sysDevice;
     StreamOptions m_StreamOptions = {};
-    StreamParameters m_StreamParams = {};
+    StreamParameters m_StreamParams[2] = {{}, {}};
 };
 
 using ApiDevList = std::vector<DeviceInstance>;

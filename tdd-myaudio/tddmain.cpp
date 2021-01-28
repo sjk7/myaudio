@@ -10,19 +10,56 @@ using namespace std;
 void test_creating_devices()
 {
     audio::myaudio audio_all;
+    bool tests_hit[3] = {};
 
     for (const auto &api : audio_all.enumerator().apis())
     {
         int c = 0;
+
         for (const auto &sdr : api.systemDevices())
         {
             const auto &sd = sdr.get();
             auto myDevice = audio::DeviceInstance(sd);
+            assert(myDevice.systemDevice().isValid());
+            const auto &inParms =
+                myDevice.streamParameters(audio::Direction::input);
+            const auto &outParms =
+                myDevice.streamParameters(audio::Direction::output);
+
+            if (myDevice.systemDevice().deviceType() ==
+                audio::DeviceTypes::input)
+            {
+
+                assert((int)inParms.deviceId == myDevice.DeviceId());
+                assert(inParms.isValid());
+                assert(!outParms.isValid());
+                tests_hit[0] = true;
+            }
+            else if (myDevice.systemDevice().deviceType() ==
+                     audio::DeviceTypes::output)
+            {
+                assert((int)outParms.deviceId == myDevice.DeviceId());
+                assert(outParms.isValid());
+                assert(!inParms.isValid());
+                tests_hit[1] = true;
+            }
+            else if (myDevice.systemDevice().isDuplex())
+            {
+                assert((int)outParms.deviceId == myDevice.DeviceId());
+                assert((int)inParms.deviceId == myDevice.DeviceId());
+                assert(outParms.isValid());
+                assert(inParms.isValid());
+                tests_hit[2] = true;
+            }
             assert(myDevice.hostApi() == &api);
             assert(myDevice.DeviceId() == c);
             ++c;
         }
     }
+
+    assert(std::all_of(std::begin(tests_hit), std::end(tests_hit),
+                       [](auto &test) { return test; }) &&
+           "Not all test scenarios for test_creating_devices hit");
 }
 
 void test_non_existent(const audio::DeviceEnumerator &e)
@@ -82,8 +119,10 @@ int main()
         for (const auto &d : api.systemDevices())
         {
             cout << "***************************" << endl;
+
             std::string s{audio::deviceToString(d)};
             const auto &dev = d.get();
+            assert(dev.isValid());
             const auto dbak =
                 the_enumerator.findDevice(api.displayName, d.get().info.name);
             assert(dbak && dbak->info.name == dev.info.name);
@@ -140,6 +179,10 @@ int main()
         create_specific_audio(api);
     cout.flush();
 
+    auto &e = the_enumerator;
+    test_non_existent(e);
+    test_creating_devices();
+
     cout << flush;
     int i = 0;
     while (i++ < 1000)
@@ -148,8 +191,5 @@ int main()
         std::cerr << "\r";
     }
 
-    auto &e = the_enumerator;
-    test_non_existent(e);
-    test_creating_devices();
     return 0;
 }
