@@ -5,7 +5,7 @@ CONFIG += c++17
 QMAKE_CFLAGS += -std=c99
 
 unix{
-    #QMAKE_CXXFLAGS += -Wpedantic -Wall -flto -Wodr -g -fno-inline
+    QMAKE_CXXFLAGS += -Wpedantic -Wall -Wodr #-Wlifetime
 }
 
 linux{

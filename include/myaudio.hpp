@@ -42,8 +42,10 @@ isDeviceType(const DeviceTypes wanted, const DeviceTypes check_for) noexcept
     return (uwanted & ucheck) != 0;
 }
 
+using DeviceInfo = RtAudio::DeviceInfo;
+
 [[maybe_unused]] static inline DeviceTypes
-deviceTypeFromInfo(const RtAudio::DeviceInfo &info)
+deviceTypeFromInfo(const DeviceInfo &info)
 {
     if (info.duplexChannels > 0) return DeviceTypes::duplex;
     if (info.outputChannels > 0) return DeviceTypes::output;
@@ -54,22 +56,23 @@ deviceTypeFromInfo(const RtAudio::DeviceInfo &info)
 
 struct HostApi;
 struct DeviceEnumerator;
+using Api = RtAudio::Api;
+
 struct SystemDevice
 {
     friend struct DeviceEnumerator;
 
-    SystemDevice(const int deviceId, const RtAudio::DeviceInfo &info,
-                 const RtAudio::Api api)
+    SystemDevice(const int deviceId, const DeviceInfo &info, const Api api)
         : info(info), rtapi(api), m_DeviceType(deviceTypeFromInfo(info)),
           m_DeviceId(deviceId)
     {
     }
 
     ~SystemDevice() {}
-    const RtAudio::DeviceInfo &deviceInfo() const noexcept { return info; }
+    const DeviceInfo &deviceInfo() const noexcept { return info; }
 
-    const RtAudio::DeviceInfo info;
-    const RtAudio::Api rtapi;
+    const DeviceInfo info;
+    const Api rtapi;
     const DeviceTypes m_DeviceType = DeviceTypes::unknown;
     DeviceTypes deviceType() const noexcept { return m_DeviceType; }
 
@@ -93,15 +96,6 @@ struct SystemDevice
     // corresponds to index in RtAudio::getDeviceCount()
     int m_DeviceId = -1;
     const HostApi *hostApi = nullptr;
-};
-
-struct SystemDeviceInstance
-{
-    SystemDeviceInstance(const SystemDevice &sd) : m_sysDevice(sd) {}
-    const SystemDevice &systemDevice() const { return m_sysDevice; }
-
-  private:
-    const SystemDevice &m_sysDevice;
 };
 
 using SysDevList = std::vector<SystemDevice>;
@@ -155,11 +149,11 @@ static inline std::string formatsToString(const RtAudioFormat f)
 
 struct HostApi
 {
-    const RtAudio::Api api;
+    const Api api;
     const std::string name;
     const std::string displayName;
-    HostApi(const RtAudio::Api api, std::string_view name,
-            std::string_view displayname, SysDevListRef &devices)
+    HostApi(const Api api, std::string_view name, std::string_view displayname,
+            SysDevListRef &devices)
         : api(api), name(name), displayName(displayname),
           m_systemDevices(devices)
     {
@@ -170,21 +164,111 @@ struct HostApi
     SysDevListRef m_systemDevices;
 };
 
+using StreamOptions = RtAudio::StreamOptions;
+using StreamParameters = RtAudio::StreamParameters;
+
+[[maybe_unused]] static inline StreamOptions StreamOptionsDefault()
+{
+    StreamOptions ret = StreamOptions(RTAUDIO_SCHEDULE_REALTIME, 1024, 0);
+    return ret;
+}
+enum class Direction
+{
+    not_specified,
+    input,
+    output,
+    duplex = input | output
+};
+
+/*!
+ * \brief StreamParamsDefault: NOTE I can throw std::runtime_error!
+ * \param sd
+ * \param dir
+ * \return
+ */
+[[maybe_unused]] static inline StreamParameters
+StreamParamsDefault(const SystemDevice &sd,
+                    Direction dir = Direction::not_specified)
+{
+    auto first_channel = 0;
+    auto def_chans = 2;
+    if (dir == Direction::not_specified)
+    {
+        if (sd.isDuplex())
+        {
+            def_chans = (std::min)((int)sd.info.duplexChannels, 2);
+        }
+        else if (sd.isInput())
+        {
+
+            def_chans = (std::min)((int)sd.info.inputChannels, 2);
+        }
+        else
+        {
+            def_chans = (std::min)((int)sd.info.outputChannels, 2);
+        }
+    }
+    else
+    {
+        if (dir == Direction::input)
+        {
+            if ((int)sd.deviceType() & (int)DeviceTypes::input)
+            {
+                def_chans = (std::min)((int)sd.info.inputChannels, 2);
+            }
+            else
+            {
+                throw std::runtime_error(
+                    "StreamParamsDefault: input direction requested, but the "
+                    "device is not an input device");
+            }
+        }
+        else
+        {
+            if ((int)sd.deviceType() & (int)DeviceTypes::output)
+            {
+                def_chans = (std::min)((int)sd.info.outputChannels, 2);
+            }
+            else
+            {
+                throw std::runtime_error(
+                    "StreamParamsDefault: output direction requested, but the "
+                    "device is not an output device");
+            }
+        }
+    }
+
+    StreamParameters ret(sd.DeviceId(), def_chans, first_channel);
+    return ret;
+}
 struct DeviceInstance
 {
-  private:
-    const SystemDevice &m_systemDevice;
-
-  public:
-    DeviceInstance(const SystemDevice &sd) : m_systemDevice(sd)
+    DeviceInstance(const SystemDevice &sd, StreamOptions opts = {},
+                   StreamParameters params = {})
+        : m_sysDevice(sd), m_StreamOptions(opts), m_StreamParams(params)
     {
-        m_StreamParams.deviceId = m_systemDevice.DeviceId();
+        if (params.nChannels == 0)
+        {
+            m_StreamParams = StreamParamsDefault(sd);
+        }
+        if (opts.numberOfBuffers == 0)
+        {
+            m_StreamOptions = StreamOptionsDefault();
+        }
     }
-    const SystemDevice &systemDevice() const noexcept { return m_systemDevice; }
-    RtAudio::StreamOptions m_StreamOptions = {};
-    RtAudio::StreamParameters m_StreamParams = {};
+    const SystemDevice &systemDevice() const { return m_sysDevice; }
     // corresponds to index in RtAudio::getDeviceCount()
-    int DeviceId() const { return m_systemDevice.DeviceId(); }
+    int DeviceId() const noexcept { return m_sysDevice.DeviceId(); }
+    const HostApi *hostApi() const noexcept
+    {
+        assert(m_sysDevice.Host_Api());
+        return m_sysDevice.Host_Api();
+    }
+
+  private:
+    const SystemDevice &m_sysDevice;
+    StreamOptions m_StreamOptions = {};
+    StreamParameters m_StreamParams = {};
 };
 
 using ApiDevList = std::vector<DeviceInstance>;
@@ -202,16 +286,16 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     const ApiList &apis() const noexcept { return m_apis; }
     const SysDevList systemDevices() const noexcept { return m_sysDevs; }
 
-    const HostApi *apiFromDisplayName(std::string_view name)
+    const HostApi *apiFromDisplayName(std::string_view name) const noexcept
     {
         return findApiByDisplayName(name);
     }
-    const HostApi *apiFromName(std::string_view name)
+    const HostApi *apiFromName(std::string_view name) const noexcept
     {
         return this->findApiByName(name);
     }
     const SystemDevice *findDevice(const HostApi &a,
-                                   std::string_view deviceName)
+                                   std::string_view deviceName) const noexcept
     {
         for (const auto &d : a.systemDevices())
         {
@@ -221,13 +305,13 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
         return nullptr;
     }
     const SystemDevice *findDevice(std::string_view apiDisplayName,
-                                   std::string_view deviceName)
+                                   std::string_view deviceName) const noexcept
     {
         auto api = apiFromDisplayName(apiDisplayName);
         if (!api) return nullptr;
         return findDevice(*api, deviceName);
     }
-    const HostApi *findHostApi(RtAudio::Api rtapi)
+    const HostApi *findHostApi(Api rtapi)
     {
         auto ptr = std::find_if(m_apis.begin(), m_apis.end(),
                                 [&](const auto &a) { return a.api == rtapi; });
@@ -247,7 +331,8 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     SysDevListRef m_sysDevsInput;
     SysDevListRef m_sysDevsDuplex;
     ApiList m_apis;
-    const HostApi *findApiByDisplayName(std::string_view displayName)
+    const HostApi *
+    findApiByDisplayName(std::string_view displayName) const noexcept
     {
 
         for (const auto &api : apis())
@@ -259,7 +344,7 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
         }
         return nullptr; // not found
     }
-    const HostApi *findApiByName(std::string_view name)
+    const HostApi *findApiByName(std::string_view name) const noexcept
     {
         for (const auto &api : apis())
         {
@@ -299,11 +384,11 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
             {
                 std::cerr << "Too Many Devices!" << std::endl;
                 std::terminate();
-                }
-                refs.push_back(dsys);
-                if (info.duplexChannels > 0) m_sysDevsDuplex.push_back(dsys);
-                if (info.outputChannels > 0) m_sysDevsOutput.push_back(dsys);
-                if (info.inputChannels > 0) m_sysDevsInput.push_back(dsys);
+            }
+            refs.push_back(dsys);
+            if (info.duplexChannels > 0) m_sysDevsDuplex.push_back(dsys);
+            if (info.outputChannels > 0) m_sysDevsOutput.push_back(dsys);
+            if (info.inputChannels > 0) m_sysDevsInput.push_back(dsys);
 
         }; // devices
 
@@ -325,7 +410,7 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     void enum_apis(RtAudio *prt = nullptr)
     {
         clear();
-        using rtapiList = std::vector<RtAudio::Api>;
+        using rtapiList = std::vector<Api>;
         rtapiList myapiList;
         RtAudio::getCompiledApi(myapiList);
         std::string api_name;

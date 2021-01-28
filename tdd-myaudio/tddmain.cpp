@@ -7,6 +7,40 @@ using namespace std::chrono_literals;
 
 using namespace std;
 
+void test_creating_devices()
+{
+    audio::myaudio audio_all;
+
+    for (const auto &api : audio_all.enumerator().apis())
+    {
+        int c = 0;
+        for (const auto &sdr : api.systemDevices())
+        {
+            const auto &sd = sdr.get();
+            auto myDevice = audio::DeviceInstance(sd);
+            assert(myDevice.hostApi() == &api);
+            assert(myDevice.DeviceId() == c);
+            ++c;
+        }
+    }
+}
+
+void test_non_existent(const audio::DeviceEnumerator &e)
+{
+    // sanity:
+    auto found =
+        e.findDevice(e.apis().at(0), e.systemDevices().at(0).info.name);
+    assert(found != nullptr);
+    auto ptr = e.apiFromDisplayName("xyx");
+    assert(ptr == nullptr);
+    ptr = e.apiFromName("abc");
+    assert(ptr == 0);
+    const auto pd = e.findDevice("meh", "moo");
+    assert(pd == nullptr);
+    auto pdd = e.findDevice(e.apis().at(0), "na na na");
+    assert(pdd == nullptr);
+}
+
 void create_specific_audio(const audio::HostApi &api)
 {
     audio::myaudio audio(api);
@@ -113,5 +147,9 @@ int main()
         std::this_thread::sleep_for(1000000ns);
         std::cerr << "\r";
     }
+
+    auto &e = the_enumerator;
+    test_non_existent(e);
+    test_creating_devices();
     return 0;
 }

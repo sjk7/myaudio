@@ -364,7 +364,13 @@ class RTAUDIO_DLL_PUBLIC RtAudio
             firstChannel; /*!< First channel index on device (default = 0). */
 
         // Default constructor.
-        StreamParameters() : deviceId(0), nChannels(0), firstChannel(0) {}
+        StreamParameters(unsigned int deviceId, unsigned int nChannels,
+                         unsigned int firstChannel)
+            : deviceId(deviceId), nChannels(nChannels),
+              firstChannel(firstChannel)
+        {
+        }
+        StreamParameters() = default;
     };
 
     //! The structure for specifying stream options.
@@ -441,7 +447,15 @@ class RTAUDIO_DLL_PUBLIC RtAudio
                            with flag RTAUDIO_SCHEDULE_REALTIME). */
 
         // Default constructor.
-        StreamOptions() : flags(0), numberOfBuffers(0), priority(0) {}
+        StreamOptions(int flags, unsigned int nBuffers = 2, int priority = 0)
+            : flags(flags), numberOfBuffers(nBuffers), priority(priority)
+        {
+        }
+        StreamOptions() = default;
+        StreamOptions(const StreamOptions &rhs) = default;
+        StreamOptions(StreamOptions &&) = default;
+        StreamOptions &operator=(const StreamOptions &rhs) = default;
+        StreamOptions &operator=(StreamOptions &&) = default;
     };
 
     //! A static function to determine the current RtAudio version.
