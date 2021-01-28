@@ -8,6 +8,10 @@
 namespace audio
 {
 
+namespace detail
+{
+
+}
 template <typename T> struct no_copy
 {
     no_copy() = default;
@@ -479,7 +483,7 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     }
 };
 
-class myaudio : public RtAudio
+class myaudio : private RtAudio, public no_copy<myaudio>
 {
     DeviceEnumerator m_enum;
     std::string m_sid;
@@ -495,6 +499,16 @@ class myaudio : public RtAudio
     {
     }
     virtual ~myaudio() {}
+
+    void openRtApi(RtAudio::Api)
+    {
+        throw std::runtime_error(
+            "note: openRtApi() function is not supported as I am worried about "
+            "the"
+            "enumerator references becoming invalid. Just create a different "
+            "myaudio"
+            "instead, and specify the api in the constructor.");
+    }
     DeviceEnumerator &enumerator() { return m_enum; }
     std::string_view id() const noexcept { return m_sid; }
     const HostApi *currentApi()

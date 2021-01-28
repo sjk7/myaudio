@@ -11,6 +11,16 @@ void test_creating_devices()
 {
     audio::myaudio audio_all;
     bool tests_hit[3] = {};
+    std::string errstr;
+    try
+    {
+        audio_all.openRtApi(RtAudio::Api::WINDOWS_DS);
+    }
+    catch (const std::exception &e)
+    {
+        errstr = e.what();
+    }
+    assert(!errstr.empty() && "Expected openRtApi to always fail");
 
     for (const auto &api : audio_all.enumerator().apis())
     {
