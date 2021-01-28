@@ -1,10 +1,31 @@
 #include "../include/myaudio.hpp"
 #include <chrono>
 #include <iostream>
+#include <set>
 #include <thread>
 using namespace std::chrono_literals;
 
 using namespace std;
+
+void create_specific_audio(const audio::HostApi &api)
+{
+    audio::myaudio audio(api);
+    auto &e = audio.enumerator();
+    cout << "******************************************************************"
+            "*********\n";
+    std::cerr << "Enumerating devices ONLY in hostApi: " << api.displayName
+              << std::endl;
+    cout << "Using api: " << api.displayName << " There are "
+         << e.systemDevices().size() << " devices" << endl;
+    for (const auto &d : e.systemDevices())
+    {
+        assert(d.Host_Api() == audio.currentApi());
+    }
+    cout << "******************************************************************"
+            "*********\n";
+    cout << "******************************************************************"
+            "*********\n";
+}
 
 int main()
 {
@@ -34,7 +55,6 @@ int main()
             assert(dbak && dbak->info.name == dev.info.name);
             assert(dev.Host_Api() == &api);
             assert(dev.Host_Api()->displayName == api.displayName);
-            assert(audio.currentApi() == &api);
             assert(dev.deviceInfo().name == dbak->deviceInfo().name);
             assert(dev.DeviceId() >= 0);
             cout << "This device's global device id is: " << dev.DeviceId()
@@ -53,7 +73,10 @@ int main()
 
     cout << "Total Devices on system "
          << audio.enumerator().systemDevices().size() << endl;
-    assert(audio.enumerator().systemDevices().size() == audio.getDeviceCount());
+    for (const auto &d : audio.enumerator().systemDevices())
+    {
+        assert(the_enumerator.findHostApi(d.rtapi) != nullptr);
+    }
 
     cout << "Duplex devices on system: "
          << audio.enumerator().duplexDevices().size() << endl;
@@ -79,6 +102,8 @@ int main()
     }
     cout << "---------------------------------------" << endl << endl;
 
+    for (const auto &api : the_enumerator.apis())
+        create_specific_audio(api);
     cout.flush();
 
     cout << flush;

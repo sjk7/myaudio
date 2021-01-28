@@ -3396,6 +3396,7 @@ unlock:
 #include "asio.h"
 #include "asiodrivers.h"
 #include "asiosys.h"
+#include "ginclude.h"
 #include "iasiothiscallresolver.h"
 #include <cmath>
 
@@ -5158,6 +5159,7 @@ RtAudio::DeviceInfo RtApiWasapi::getDeviceInfo(unsigned int device)
 
     // probed
     info.probed = false;
+    // info.api = RtAudio::Api::WINDOWS_WASAPI;
 
     // Count capture devices
     errorText_.clear();
@@ -6772,6 +6774,7 @@ unsigned int RtApiDs ::getDeviceCount(void)
 RtAudio::DeviceInfo RtApiDs ::getDeviceInfo(unsigned int device)
 {
     RtAudio::DeviceInfo info;
+    // info.api = RtAudio::Api::WINDOWS_DS;
     info.probed = false;
 
     if (dsDevices.size() == 0)

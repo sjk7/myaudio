@@ -19,7 +19,7 @@ CXXFLAGS      = -nologo -Zc:wchar_t -FS -Zc:rvalueCast -Zc:inline -Zc:strictStri
 INCPATH       = -I..\tdd-myaudio -I. -I..\rtAudio -I..\build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug\debug -I..\..\..\Qt\5.15.2\msvc2019_64\mkspecs\win32-msvc 
 LINKER        = link
 LFLAGS        = /NOLOGO /DYNAMICBASE /NXCOMPAT /DEBUG /SUBSYSTEM:CONSOLE "/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' publicKeyToken='6595b64144ccf1df' language='*' processorArchitecture='*'"
-LIBS          = /LIBPATH:C:\Users\DevNVME\Desktop\myaudio\build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug\debug rtAudiocpp.lib dsound.lib ole32.lib user32.lib /LIBPATH:C:\Users\DevNVME\Desktop\myaudio\build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug\debug C:\Users\DevNVME\Desktop\myaudio\build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug\debug\rtAudiocpp.lib   
+LIBS          = /LIBPATH:C:\Users\DevNVME\Desktop\myaudio\build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug\debug rtAudiocpp.lib dsound.lib ole32.lib user32.lib Advapi32.lib /LIBPATH:C:\Users\DevNVME\Desktop\myaudio\build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug\debug C:\Users\DevNVME\Desktop\myaudio\build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug\debug\rtAudiocpp.lib   
 QMAKE         = C:\Users\DevNVME\Qt\5.15.2\msvc2019_64\bin\qmake.exe
 DEL_FILE      = del
 CHK_DIR_EXISTS= if not exist

@@ -346,7 +346,6 @@ class RTAUDIO_DLL_PUBLIC RtAudio
         unsigned int preferredSampleRate; /*!< Preferred sample rate, e.g. for
                                              WASAPI the system sample rate. */
         RtAudioFormat nativeFormats; /*!< Bit mask of supported data formats. */
-
         // Default constructor.
         DeviceInfo()
             : probed(false), outputChannels(0), inputChannels(0),
@@ -1084,7 +1083,10 @@ class RtApiAsio : public RtApi
   public:
     RtApiAsio();
     ~RtApiAsio();
-    RtAudio::Api getCurrentApi(void) override { return RtAudio::WINDOWS_ASIO; }
+    RtAudio::Api getCurrentApi(void) override
+    {
+        return RtAudio::Api::WINDOWS_ASIO;
+    }
     unsigned int getDeviceCount(void) override;
     RtAudio::DeviceInfo getDeviceInfo(unsigned int device) override;
     void closeStream(void) override;

@@ -27,7 +27,7 @@ else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../b
 else:linux: PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug/librtAudiocpp.a
 
 win32-msvc{
-    LIBS += -ldsound -lole32 -luser32
+    LIBS += -ldsound -lole32 -luser32 -lAdvapi32
     INCLUDEPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug
     DEPENDPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug
 }

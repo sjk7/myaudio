@@ -193,6 +193,15 @@ using ApiList = std::vector<HostApi>;
 struct DeviceEnumerator : public no_copy<DeviceEnumerator>
 {
   public:
+  public:
+    DeviceEnumerator() { enum_all(); }
+    DeviceEnumerator(RtAudio *prt) { enum_apis(prt); }
+    // Care! This will invalidate any references that you may have to apis and
+    // devices.
+    void Refresh() { enum_all(); }
+    const ApiList &apis() const noexcept { return m_apis; }
+    const SysDevList systemDevices() const noexcept { return m_sysDevs; }
+
     const HostApi *apiFromDisplayName(std::string_view name)
     {
         return findApiByDisplayName(name);
@@ -232,11 +241,11 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     const SysDevListRef &outputDevices() const { return m_sysDevsOutput; }
 
   private:
+    // all devices
     SysDevList m_sysDevs;
     SysDevListRef m_sysDevsOutput;
     SysDevListRef m_sysDevsInput;
     SysDevListRef m_sysDevsDuplex;
-    ApiDevList m_apiDevs;
     ApiList m_apis;
     const HostApi *findApiByDisplayName(std::string_view displayName)
     {
@@ -266,84 +275,100 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     {
         m_sysDevs.clear();
         m_apis.clear();
-        m_apiDevs.clear();
         m_sysDevsOutput.clear();
         m_sysDevsInput.clear();
         m_sysDevsDuplex.clear();
     }
+    static constexpr size_t TOTAL_MAX_DEVICES = 150;
+    SysDevListRef enum_api_devices(RtAudio *prt)
+    {
+        assert(prt);
+        if (!prt)
+            throw std::runtime_error(
+                "enum_api_devices: pointer to audio object required");
+        auto a = prt->getCurrentApi();
+        auto sname = RtAudio::getApiDisplayName(a);
+        SysDevListRef refs;
+        SysDevList &sysDevs = this->m_sysDevs;
+        for (auto i = 0u; i < prt->getDeviceCount(); ++i)
+        {
+            const auto &info = prt->getDeviceInfo(i);
 
-    void enum_apis()
+            const auto &dsys = sysDevs.emplace_back(SystemDevice(i, info, a));
+            if (sysDevs.size() >= TOTAL_MAX_DEVICES)
+            {
+                std::cerr << "Too Many Devices!" << std::endl;
+                std::terminate();
+                }
+                refs.push_back(dsys);
+                if (info.duplexChannels > 0) m_sysDevsDuplex.push_back(dsys);
+                if (info.outputChannels > 0) m_sysDevsOutput.push_back(dsys);
+                if (info.inputChannels > 0) m_sysDevsInput.push_back(dsys);
+
+        }; // devices
+
+        return refs;
+    }
+
+    void enum_api(RtAudio *rta)
+    {
+        assert(rta);
+        if (!rta)
+            throw std::runtime_error("enum_api: no audio object pointer!");
+        auto a = rta->getCurrentApi();
+        auto refs = enum_api_devices(rta);
+        auto api_name = RtAudio::getApiName(a);
+        m_apis.emplace_back(
+            HostApi{a, api_name, RtAudio::getApiDisplayName(a), refs});
+    }
+
+    void enum_apis(RtAudio *prt = nullptr)
     {
         clear();
         using rtapiList = std::vector<RtAudio::Api>;
         rtapiList myapiList;
         RtAudio::getCompiledApi(myapiList);
-        std::string sname;
-        static constexpr size_t TOTAL_MAX_DEVICES = 150;
+        std::string api_name;
         // must reserve, else references to devices will be invalided.
-        const auto dev_size = sizeof(SystemDevice);
-        const auto mem_used_k = (dev_size * TOTAL_MAX_DEVICES) / 1024;
-        (void)mem_used_k;
-
         m_sysDevs.reserve(TOTAL_MAX_DEVICES);
-        try
+        if (prt)
         {
-            for (const auto &a : myapiList)
+            enum_api(prt);
+        }
+        else
+        {
+            try
             {
-                sname = RtAudio::getApiDisplayName(a);
-                RtAudio rt(a);
-                SysDevListRef refs;
-                SysDevList &sysDevs = this->m_sysDevs;
-                for (auto i = 0u; i < rt.getDeviceCount(); ++i)
+                for (const auto &a : myapiList)
                 {
-                    const auto &info = rt.getDeviceInfo(i);
-                    const auto &dsys =
-                        sysDevs.emplace_back(SystemDevice(i, info, a));
-                    if (sysDevs.size() >= TOTAL_MAX_DEVICES)
-                    {
-                        std::cerr << "Too Many Devices!" << std::endl;
-                        std::terminate();
-                    }
-                    refs.push_back(dsys);
-                    if (info.duplexChannels > 0)
-                        m_sysDevsDuplex.push_back(dsys);
-                    if (info.outputChannels > 0)
-                        m_sysDevsOutput.push_back(dsys);
-                    if (info.inputChannels > 0) m_sysDevsInput.push_back(dsys);
-                }; // devices
+                    RtAudio rta(a);
+                    enum_api(&rta);
 
-                m_apis.emplace_back(
-                    HostApi{a, RtAudio::getApiName(a), sname, refs});
-            } // apis
-
-            // back-pointers to rich api:
-            for (auto &d : this->m_sysDevs)
+                }; // apis
+            }
+            catch (std::runtime_error &e)
             {
-                auto *hostapi = findHostApi(d.rtapi);
-                assert(hostapi);
-                d.hostApi = hostapi;
+                std::cerr << "Failed to instantiate an instance of the backend "
+                             "using hostApi: "
+                          << api_name << ", with error: " << e.what()
+                          << std::endl;
             }
         }
-        catch (std::runtime_error &e)
+
+        // back-pointers to rich api:
+        for (auto &d : this->m_sysDevs)
         {
-            std::cerr << "Failed to instantiate an instance of the backend "
-                         "using hostApi: "
-                      << sname << ", with error: " << e.what() << std::endl;
+            auto *hostapi = findHostApi(d.rtapi);
+            assert(hostapi);
+            d.hostApi = hostapi;
         }
     }
+
     void enum_all()
     {
         clear();
         enum_apis();
     }
-
-  public:
-    DeviceEnumerator() { enum_all(); }
-    // Care! This will invalidate any references that you may have to apis and
-    // devices.
-    void Refresh() { enum_all(); }
-    const ApiList &apis() const noexcept { return m_apis; }
-    const SysDevList systemDevices() const noexcept { return m_sysDevs; }
 };
 
 class myaudio : public RtAudio
@@ -352,7 +377,15 @@ class myaudio : public RtAudio
     std::string m_sid;
 
   public:
-    myaudio(std::string_view id = "") : m_sid(id) {}
+    // create an instance of myaudio that can enumerate
+    // all Host apis and devices:
+    myaudio(std::string_view id = "") : m_enum(), m_sid(id) {}
+    // create an instance of myaudio that specifically
+    // targets one of the apis found by constructing one of the above.
+    myaudio(const HostApi &api, std::string_view id = "")
+        : RtAudio(api.api), m_enum(this), m_sid(id)
+    {
+    }
     virtual ~myaudio() {}
     DeviceEnumerator &enumerator() { return m_enum; }
     std::string_view id() const noexcept { return m_sid; }
