@@ -107,10 +107,11 @@ int main()
     cout.flush();
 
     cout << flush;
-    puts("Finished\n");
-    std::this_thread::sleep_for(1s); // else cout doesn't flush on macos. FFS!
-
-    fflush(stdout);
-    std::this_thread::sleep_for(1s); // else cout doesn't flush on macos. FFS!
+    int i = 0;
+    while (i++ < 1000)
+    {
+        std::this_thread::sleep_for(1000000ns);
+        std::cerr << "\r";
+    }
     return 0;
 }

@@ -202,6 +202,7 @@ DIST          = ../../../Qt/5.15.2/clang_64/mkspecs/features/spec_pre.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/qt_config.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/macx-clang/qmake.conf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/spec_post.prf \
+		../tdd-myaudio/.qmake.stash \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/exclusive_builds.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/mac/sdk.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/toolchain.prf \
@@ -393,6 +394,7 @@ Makefile: ../tdd-myaudio/tdd-myaudio.pro ../../../Qt/5.15.2/clang_64/mkspecs/mac
 		../../../Qt/5.15.2/clang_64/mkspecs/features/qt_config.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/macx-clang/qmake.conf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/spec_post.prf \
+		.qmake.stash \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/exclusive_builds.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/mac/sdk.prf \
 		../../../Qt/5.15.2/clang_64/mkspecs/features/toolchain.prf \
@@ -564,6 +566,7 @@ Makefile: ../tdd-myaudio/tdd-myaudio.pro ../../../Qt/5.15.2/clang_64/mkspecs/mac
 ../../../Qt/5.15.2/clang_64/mkspecs/features/qt_config.prf:
 ../../../Qt/5.15.2/clang_64/mkspecs/macx-clang/qmake.conf:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/spec_post.prf:
+.qmake.stash:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/exclusive_builds.prf:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/mac/sdk.prf:
 ../../../Qt/5.15.2/clang_64/mkspecs/features/toolchain.prf:
@@ -609,6 +612,7 @@ clean: compiler_clean
 
 distclean: clean 
 	-$(DEL_FILE) $(TARGET) 
+	-$(DEL_FILE) .qmake.stash
 	-$(DEL_FILE) Makefile
 
 

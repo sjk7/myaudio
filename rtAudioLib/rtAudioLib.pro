@@ -50,15 +50,18 @@ macx{
 
 
 SOURCES += \
-    ../rtAudio/RtAudio.cpp \
-    ../rtAudio/asio/asio.cpp \
-    ../rtAudio/asio/asiodrivers.cpp \
-    ../rtAudio/asio/asiolist.cpp \
-    ../rtAudio/asio/iasiothiscallresolver.cpp
+    ../rtAudio/RtAudio.cpp
+win32{
+SOURCES += ../rtAudio/asio/asio.cpp \
+            ../rtAudio/asio/asiodrivers.cpp \
+            ../rtAudio/asio/asiolist.cpp \
+            ../rtAudio/asio/iasiothiscallresolver.cpp
+}
 
 HEADERS += \
-    ../include/myaudio.hpp \
-    ../rtAudio/RtAudio.h \
+    ../include/myaudio.hpp
+    win32{
+    SOURCES += ../rtAudio/RtAudio.h \
     ../rtAudio/asio/asio.h \
     ../rtAudio/asio/asiodrivers.h \
     ../rtAudio/asio/asiolist.h \
@@ -66,6 +69,8 @@ HEADERS += \
     ../rtAudio/asio/ginclude.h \
     ../rtAudio/asio/iasiodrv.h \
     ../rtAudio/asio/iasiothiscallresolver.h
+}
+
 
 TARGET = rtAudiocpp
 
