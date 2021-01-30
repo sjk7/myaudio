@@ -90,13 +90,17 @@
     - \e RTAUDIO_FLOAT64: Normalized between plus/minus 1.0.
 */
 typedef unsigned long RtAudioFormat;
-static const RtAudioFormat RTAUDIO_SINT8 = 0x1;  // 8-bit signed integer.
-static const RtAudioFormat RTAUDIO_SINT16 = 0x2; // 16-bit signed integer.
-static const RtAudioFormat RTAUDIO_SINT24 = 0x4; // 24-bit signed integer.
-static const RtAudioFormat RTAUDIO_SINT32 = 0x8; // 32-bit signed integer.
-static const RtAudioFormat RTAUDIO_FLOAT32 =
+[[maybe_unused]] static const RtAudioFormat RTAUDIO_SINT8 =
+    0x1; // 8-bit signed integer.
+[[maybe_unused]] static const RtAudioFormat RTAUDIO_SINT16 =
+    0x2; // 16-bit signed integer.
+[[maybe_unused]] static const RtAudioFormat RTAUDIO_SINT24 =
+    0x4; // 24-bit signed integer.
+[[maybe_unused]] static const RtAudioFormat RTAUDIO_SINT32 =
+    0x8; // 32-bit signed integer.
+[[maybe_unused]] static const RtAudioFormat RTAUDIO_FLOAT32 =
     0x10; // Normalized between plus/minus 1.0.
-static const RtAudioFormat RTAUDIO_FLOAT64 =
+[[maybe_unused]] static const RtAudioFormat RTAUDIO_FLOAT64 =
     0x20; // Normalized between plus/minus 1.0.
 
 /*! \typedef typedef unsigned long RtAudioStreamFlags;
@@ -149,17 +153,17 @@ static const RtAudioFormat RTAUDIO_FLOAT64 =
     to automatically connect the ports of the client to the audio device.
 */
 typedef unsigned int RtAudioStreamFlags;
-static const RtAudioStreamFlags RTAUDIO_NONINTERLEAVED =
+[[maybe_unused]] static const RtAudioStreamFlags RTAUDIO_NONINTERLEAVED =
     0x1; // Use non-interleaved buffers (default = interleaved).
-static const RtAudioStreamFlags RTAUDIO_MINIMIZE_LATENCY =
+[[maybe_unused]] static const RtAudioStreamFlags RTAUDIO_MINIMIZE_LATENCY =
     0x2; // Attempt to set stream parameters for lowest possible latency.
-static const RtAudioStreamFlags RTAUDIO_HOG_DEVICE =
+[[maybe_unused]] static const RtAudioStreamFlags RTAUDIO_HOG_DEVICE =
     0x4; // Attempt grab device and prevent use by others.
-static const RtAudioStreamFlags RTAUDIO_SCHEDULE_REALTIME =
+[[maybe_unused]] static const RtAudioStreamFlags RTAUDIO_SCHEDULE_REALTIME =
     0x8; // Try to select realtime scheduling for callback thread.
-static const RtAudioStreamFlags RTAUDIO_ALSA_USE_DEFAULT =
+[[maybe_unused]] static const RtAudioStreamFlags RTAUDIO_ALSA_USE_DEFAULT =
     0x10; // Use the "default" PCM device (ALSA only).
-static const RtAudioStreamFlags RTAUDIO_JACK_DONT_CONNECT =
+[[maybe_unused]] static const RtAudioStreamFlags RTAUDIO_JACK_DONT_CONNECT =
     0x20; // Do not automatically connect ports (JACK only).
 
 /*! \typedef typedef unsigned long RtAudioStreamStatus;
@@ -176,10 +180,10 @@ static const RtAudioStreamFlags RTAUDIO_JACK_DONT_CONNECT =
    break in the output sound.
 */
 typedef unsigned int RtAudioStreamStatus;
-static const RtAudioStreamStatus RTAUDIO_INPUT_OVERFLOW =
+[[maybe_unused]] static const RtAudioStreamStatus RTAUDIO_INPUT_OVERFLOW =
     0x1; // Input data was discarded because of an overflow condition at the
          // driver.
-static const RtAudioStreamStatus RTAUDIO_OUTPUT_UNDERFLOW =
+[[maybe_unused]] static const RtAudioStreamStatus RTAUDIO_OUTPUT_UNDERFLOW =
     0x2; // The output buffer ran low, likely causing a gap in the output sound.
 
 //! RtAudio callback function prototype.
@@ -359,7 +363,13 @@ class RTAUDIO_DLL_PUBLIC RtAudio
     struct StreamParameters
     {
         static constexpr inline int BAD_DEVICE_ID = -1;
+#ifdef _MSC_VER
+#pragma warning(disable : 4146)
+#endif
         static constexpr unsigned int BAD_DEVICE_IDU = -1U;
+#ifdef _MSC_VER
+#pragma warning(default : 4146)
+#endif
         unsigned int deviceId =
             BAD_DEVICE_IDU; /*!< Device index (0 to getDeviceCount() - 1). */
         unsigned int nChannels; /*!< Number of channels. */

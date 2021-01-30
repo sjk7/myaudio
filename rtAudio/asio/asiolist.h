@@ -8,7 +8,7 @@
 
 #define MAXPATHLEN			512
 #define MAXDRVNAMELEN		128
-
+#include <windows.h>
 struct asiodrvstruct
 {
 	int						drvID;

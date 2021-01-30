@@ -60,15 +60,7 @@ OBJECTS       = debug\RtAudio.obj \
 		debug\asiolist.obj \
 		debug\iasiothiscallresolver.obj
 
-DIST          =  ../include/myaudio.hpp \
-		../rtAudio/RtAudio.h \
-		../rtAudio/asio/asio.h \
-		../rtAudio/asio/asiodrivers.h \
-		../rtAudio/asio/asiolist.h \
-		../rtAudio/asio/asiosys.h \
-		../rtAudio/asio/ginclude.h \
-		../rtAudio/asio/iasiodrv.h \
-		../rtAudio/asio/iasiothiscallresolver.h ..\rtAudio\RtAudio.cpp \
+DIST          =  ../include/myaudio.hpp ..\rtAudio\RtAudio.cpp \
 		..\rtAudio\asio\asio.cpp \
 		..\rtAudio\asio\asiodrivers.cpp \
 		..\rtAudio\asio\asiolist.cpp \
@@ -189,18 +181,18 @@ compiler_clean:
 
 debug\RtAudio.obj: ..\rtAudio\RtAudio.cpp ..\rtAudio\RtAudio.h \
 		..\rtAudio\asio\asio.h \
-		..\rtAudio\asio\asiodrivers.h \
 		..\rtAudio\asio\ginclude.h \
+		..\rtAudio\asio\asiodrivers.h \
 		..\rtAudio\asio\asiolist.h \
 		..\rtAudio\asio\asiosys.h \
 		..\rtAudio\asio\iasiothiscallresolver.h
 
-debug\asio.obj: ..\rtAudio\asio\asio.cpp ..\rtAudio\asio\asiosys.h \
-		..\rtAudio\asio\asio.h \
-		..\rtAudio\asio\iasiodrv.h \
-		..\rtAudio\asio\asiodrivers.h \
+debug\asio.obj: ..\rtAudio\asio\asio.cpp ..\rtAudio\asio\asio.h \
 		..\rtAudio\asio\ginclude.h \
-		..\rtAudio\asio\asiolist.h
+		..\rtAudio\asio\asiosys.h \
+		..\rtAudio\asio\asiodrivers.h \
+		..\rtAudio\asio\asiolist.h \
+		..\rtAudio\asio\iasiodrv.h
 
 debug\asiodrivers.obj: ..\rtAudio\asio\asiodrivers.cpp ..\rtAudio\asio\asiodrivers.h \
 		..\rtAudio\asio\ginclude.h \
@@ -209,10 +201,11 @@ debug\asiodrivers.obj: ..\rtAudio\asio\asiodrivers.cpp ..\rtAudio\asio\asiodrive
 		..\rtAudio\asio\asiosys.h \
 		..\rtAudio\asio\asio.h
 
-debug\asiolist.obj: ..\rtAudio\asio\asiolist.cpp ..\rtAudio\asio\iasiodrv.h \
+debug\asiolist.obj: ..\rtAudio\asio\asiolist.cpp ..\rtAudio\asio\asiolist.h \
+		..\rtAudio\asio\iasiodrv.h \
 		..\rtAudio\asio\asiosys.h \
 		..\rtAudio\asio\asio.h \
-		..\rtAudio\asio\asiolist.h
+		..\rtAudio\asio\ginclude.h
 
 debug\iasiothiscallresolver.obj: ..\rtAudio\asio\iasiothiscallresolver.cpp ..\rtAudio\asio\iasiothiscallresolver.h
 
