@@ -522,6 +522,9 @@ class RTAUDIO_DLL_PUBLIC RtAudio
     int bad_api; // did you ask for an api that is not compiled, or is not
                  // supported on this system?
 
+    RtAudio &operator=(const RtAudio &rhs) = delete;
+    RtAudio(const RtAudio &rhs) = delete;
+
     //! The destructor.
     /*!
       If a stream is running or open, it will be stopped and closed

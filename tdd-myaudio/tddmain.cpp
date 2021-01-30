@@ -12,30 +12,49 @@ void test_opening_output_stream()
 {
     audio::myaudio all_audio;
     auto &all_enum = all_audio.enumerator();
-    auto &first_api = all_enum.apis().at(0);
-    const auto api = first_api;
+    auto first_api = all_enum.findHostApi(RtAudio::Api::WINDOWS_WASAPI);
+    const auto api = *first_api;
 
     audio::myaudio audio_api(api);
-    auto default_output_device = audio_api.DefaultOutputDevice();
-    assert(default_output_device);
+    auto default_output_device = audio_api.enumerator().systemDevices().at(1);
+    // assert(default_output_device);
     audio::FormatType fmt = audio::defaultAudioFormat();
-    auto instance = audio::DeviceInstance(*default_output_device, fmt);
+    fmt.Format = audio::AudioFormat::SINT16;
+    auto instance = audio::DeviceInstance(default_output_device, fmt);
     struct myaudiocallback : audio::AudioCallback
     {
         myaudiocallback(audio::DeviceInstance &devInstance)
             : m_devInstance(devInstance)
         {
         }
+        unsigned int n = 0;
         int OnAudioCallback(const audio::StreamCallbackInfo &info) override
         {
             (void)info;
+            const auto desired_channels =
+                m_devInstance.streamParameters(audio::Direction::output)
+                    .nChannels;
+            assert(info.format.Channels == desired_channels);
+            if (info.format.Format == audio::AudioFormat::FLOAT32)
+            {
+                audio::dsp::fill_buffer_sine(n, info);
+            }
             return 0;
         }
         audio::DeviceInstance &m_devInstance;
     };
 
     myaudiocallback mycallback(instance);
-    audio::Stream stream = audio_api.OpenAndRunStream(&instance, &mycallback);
+    instance.streamParameters(audio::Direction::output).nChannels = 2;
+    audio::Stream stream = audio_api.OpenStream(instance, &mycallback);
+    assert(stream.HasCallback());
+    stream.Start();
+    while (stream.isRunning())
+    {
+        this_thread::sleep_for(10ms);
+        auto l = stream.GetStreamLatency();
+        l++;
+    }
 }
 
 void test_creating_devices()
@@ -141,6 +160,9 @@ void create_specific_audio(const audio::HostApi &api)
 
 int main()
 {
+    {
+        test_opening_output_stream();
+    }
     RtAudio rtaudio;
     cout << "RtAudio detail: " << RtAudio::getVersion() << endl << endl;
 

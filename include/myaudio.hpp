@@ -1,8 +1,10 @@
 #pragma once
+#define _USE_MATH_DEFINES
 #include "../rtAudio/RtAudio.h"
 #include <array>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <functional> // std::reference_wrapper
 #include <thread>
 #include <vector>
@@ -10,10 +12,112 @@
 namespace audio
 {
 
-namespace detail
+namespace dsp
 {
+#ifdef _MSC_VER
+#define PA_FORCE_INLINE __forceinline
+#else
+#define PA_FORCE_INLINE __attribute__((always_inline))
+#endif
+static inline float next_sine_sample(unsigned int &sample_num,
+                                     unsigned int samplerate,
+                                     unsigned int freq = 440)
+{
+    if (sample_num >= samplerate) sample_num = 0;
 
+    return (float)sin(freq * 2 * M_PI * sample_num++ / samplerate);
 }
+
+template <typename T> class fader
+{
+    T m_destValue;
+    float m_secToDest;
+    std::atomic<int> m_steps;
+    float m_samplerate;
+    float m_startValue = 0;
+    float m_step = 0;
+    float m_vol = 0;
+    int m_nch = 2;
+    void calc()
+    {
+        if (m_secToDest <= 0 || m_samplerate <= 0) return;
+        const float fsteps = (m_secToDest * m_samplerate) * m_nch;
+        m_steps = (int)(fsteps + 0.5f);
+        m_step = (m_destValue - m_startValue) / m_steps;
+        m_vol = m_startValue;
+    }
+
+  public:
+    fader() : m_destValue(0), m_secToDest(0), m_steps(0), m_samplerate(0) {}
+    fader(T destValue, float secToDest, float samplerate, int nch = 2)
+        : m_destValue(destValue), m_secToDest(secToDest), m_steps(0),
+          m_samplerate(samplerate), m_nch(nch), m_vol(0)
+    {
+        calc();
+    }
+
+    T volume() const noexcept { return m_vol; }
+    void arm(T destval, float samplerate, float secToDest)
+    {
+        m_startValue = m_vol;
+        m_destValue = destval;
+        m_samplerate = samplerate;
+        m_secToDest = secToDest;
+        calc();
+    }
+
+    PA_FORCE_INLINE void processSample(T &sample)
+    {
+        if (m_steps > 0)
+        {
+            sample *= m_vol;
+            m_vol += m_step;
+            if (m_vol < 0) m_vol = 0;
+            --m_steps;
+            if (m_steps <= 0)
+            {
+                m_vol = this->m_destValue;
+                return;
+            }
+        }
+    }
+
+    void processSamples(int nFrames, T *samples, const int nch)
+    {
+        while (nFrames > 0)
+        {
+            if (active())
+            {
+                for (auto ch = 0; ch < nch; ++ch)
+                {
+                    T &val = *samples++;
+                    processSample(val);
+                }
+                nFrames--;
+            }
+            else
+            {
+                if (!is_almost_equal(1.0f, m_destValue))
+                {
+                    for (auto ch = 0; ch < nch; ++ch)
+                    {
+                        *samples = *samples * m_vol;
+                        ++samples;
+                    }
+                    nFrames--;
+                }
+                else
+                {
+                    return; // nothing to do here: just multiply by one.
+                }
+            }
+        };
+    }
+
+    bool active() const noexcept { return m_steps > 0; }
+};
+} // namespace dsp
+
 template <typename T> struct no_copy
 {
     no_copy() = default;
@@ -270,15 +374,15 @@ StreamParamsDefault(const SystemDevice &sd,
 }
 struct FormatType
 {
-    AudioFormat Format;
-    unsigned int Channels;
-    unsigned int SamplesPerSec;
+    AudioFormat Format = AudioFormat::FLOAT32;
+    unsigned int Channels = 2;
+    unsigned int SamplesPerSec = 44100;
     unsigned int BitsPerSample() const { return AudioFormatToBits(Format); }
 };
 
 [[maybe_unused]] static inline FormatType defaultAudioFormat()
 {
-    return FormatType{AudioFormat::FLOAT32, 2, 44100};
+    return FormatType{};
 }
 
 struct DeviceInstance
@@ -321,13 +425,26 @@ struct DeviceInstance
         unsigned int index = static_cast<unsigned int>(direction);
         return m_StreamParams[index];
     }
-    const FormatType &Format() const { return m_format; }
+    FormatType &Format()
+    {
+        m_format.Channels = m_StreamParams[1].nChannels;
+        return m_format;
+    }
+
+    DeviceInstance(const DeviceInstance &rhs)
+        : m_sysDevice(rhs.m_sysDevice), m_StreamOptions(rhs.m_StreamOptions),
+          m_format(rhs.m_format)
+
+    {
+        m_StreamParams[0] = rhs.m_StreamParams[0];
+        m_StreamParams[1] = rhs.m_StreamParams[1];
+    }
 
   private:
     const SystemDevice &m_sysDevice;
     StreamOptions m_StreamOptions = {};
     StreamParameters m_StreamParams[2] = {{}, {}};
-    FormatType m_format;
+    mutable FormatType m_format;
 };
 
 using ApiDevList = std::vector<DeviceInstance>;
@@ -518,6 +635,7 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
 
 enum class AudioCallbackStatus : unsigned int
 {
+    none = 0,
     RTAUDIO_INPUT_OVERFLOW = 0x1, // Input data was discarded because of an
     // overflow condition at the
     // driver.
@@ -534,31 +652,48 @@ enum class AudioCallbackStatus : unsigned int
 }
 struct StreamCallbackInfo
 {
-    const void *outputBuffer;
-    const void *inputBuffer;
-    unsigned int frames;
-    double streamTime;
-    AudioCallbackStatus status;
+    const void *outputBuffer = nullptr;
+    const void *inputBuffer = nullptr;
+    unsigned int frames = 0;
+    double streamTime = 0.0;
+    AudioCallbackStatus status = AudioCallbackStatus::none;
+    FormatType format = {};
 };
+
+namespace detail
+{
+static void static_error_callback(RtAudioError::Type type,
+                                  const std::string_view s)
+{
+    std::cerr << "error_callback, with type: " << type << std::endl;
+    throw std::runtime_error(s.data());
+}
+
+} // namespace detail
 
 // Override this in your own class to accept the callback
 struct AudioCallback
 {
     virtual int OnAudioCallback(const StreamCallbackInfo &info) = 0;
+    FormatType format = {};
 };
 
 class Stream
 {
-    FormatType m_format = {};
-    static void static_error_callback(RtAudioError::Type type,
-                                      const std::string_view s)
-    {
-        std::cerr << "error_callback, with type: " << type << std::endl;
-        throw std::runtime_error(s.data());
-    }
-
   private:
+    Stream(DeviceInstance &deviceOut, RtAudio &rta, AudioCallback *cb,
+           FormatType &fmt)
+        : m_deviceInstance(deviceOut), m_rta(rta), m_pcb(cb), m_format(fmt)
+
+    {
+        assert(m_pcb);
+        puts("constructor with just an rtAudio instance");
+    }
+    DeviceInstance &m_deviceInstance;
+    RtAudio &m_rta;
     AudioCallback *m_pcb = nullptr;
+    FormatType &m_format;
+
     static int
     static_callback(const void *outputBuffer, const void *inputBuffer,
                     const unsigned int frames, const double streamTime,
@@ -567,44 +702,75 @@ class Stream
         StreamCallbackInfo info{outputBuffer, inputBuffer, frames, streamTime,
                                 AudioCallbackStatus(status)};
 
-        Stream *pthis = (Stream *)userdata;
-        return pthis->OnAudioCallback(std::forward<StreamCallbackInfo>(info));
+        auto *pcb = (AudioCallback *)userdata;
+        info.format = pcb->format;
+        return pcb->OnAudioCallback(std::forward<StreamCallbackInfo>(info));
     };
 
+  public:
+    Stream(RtAudio &rta, DeviceInstance &deviceOut, AudioCallback *cb,
+           FormatType &fmt)
+        : Stream(deviceOut, rta, cb, fmt)
+    {
+        OpenForOutput();
+    }
+    Stream(const Stream &rhs)
+        : m_deviceInstance(rhs.m_deviceInstance), m_rta(rhs.m_rta),
+          m_pcb(rhs.m_pcb), m_format(rhs.m_format),
+          m_latencyFrames(rhs.m_latencyFrames)
+    {
+        puts("copy constructor");
+    }
+
+    Stream(Stream &&rhs) = default;
+
+    ~Stream()
+    {
+        puts("Stream Destructor");
+        puts("\n");
+    }
+
+    // throws std::runtime_error if problems.
+    void Start() { m_rta.startStream(); }
+    long GetStreamLatency() const { return m_rta.getStreamLatency(); }
+    bool HasCallback() const noexcept { return m_pcb; }
+
+  private:
     int OnAudioCallback(StreamCallbackInfo &&info)
     {
         return m_pcb->OnAudioCallback(std::forward<StreamCallbackInfo>(info));
     }
 
   public:
-    bool isRunning() const { return m_prt->isStreamRunning(); }
-    Stream OpenAndRun(RtAudio &rt, DeviceInstance *pdeviceOut,
-                      AudioCallback *cb)
+    bool isRunning() const { return m_rta.isStreamRunning(); }
+
+    FormatType Format() const { return m_format; }
+
+  private:
+    Stream OpenForOutput()
     {
         using namespace std;
         using namespace chrono_literals;
-        m_pcb = cb;
-        m_prt = &rt;
         assert(m_pcb);
         if (!m_pcb)
         {
             throw std::runtime_error(
                 "Stream::OpenAndRun: a callback is REQUIRED");
         }
-        assert(pdeviceOut);
-        if (!pdeviceOut)
+
+        if (!this->m_deviceInstance.systemDevice().isValid())
         {
-            throw std::runtime_error(
-                "Stream::OpenAndRun: a DeviceInstance is REQUIRED");
+            throw std::runtime_error("Stream::OpenForOutput a DeviceInstance "
+                                     "is REQUIRED to be valid");
         }
 
         StreamOptions *opts = nullptr;
         StreamParameters *inParams = nullptr;
         const auto dir = Direction::output;
-        StreamParameters *outParams = &pdeviceOut->streamParameters(dir);
+        StreamParameters *outParams = &m_deviceInstance.streamParameters(dir);
         if (dir == Direction::duplex)
         {
-            inParams = &pdeviceOut->streamParameters(Direction::output);
+            inParams = &m_deviceInstance.streamParameters(Direction::output);
             if (!inParams || !inParams->isValid())
             {
                 throw std::runtime_error("Input parameters must be set and "
@@ -616,28 +782,30 @@ class Stream
             throw std::runtime_error(
                 "Output parameters must be set and valid for a duplex stream");
         }
-        opts = &pdeviceOut->streamOptions();
-        unsigned int bufferFrames = 0;
 
-        m_format = pdeviceOut->Format();
+        opts = &m_deviceInstance.streamOptions();
+        unsigned int bufferFrames = 1024;
 
+        m_format = m_deviceInstance.Format();
+
+        m_pcb->format =
+            m_format; // it's a copy, so its safe to access it from the callback
         unsigned int fmt = (unsigned int)m_format.Format;
-        rt.openStream(outParams, inParams, fmt, m_format.SamplesPerSec,
-                      &bufferFrames, &static_callback, this, opts,
-                      &static_error_callback);
+        m_rta.openStream(outParams, nullptr, fmt, m_format.SamplesPerSec,
+                         &bufferFrames, &static_callback, m_pcb, opts,
+                         &detail::static_error_callback);
 
-        rt.startStream();
-        while (rt.isStreamRunning())
+        m_latencyFrames = m_rta.getStreamLatency();
+
+        this->Start();
+        while (isRunning())
         {
-            std::this_thread::sleep_for(10ms);
+            this_thread::sleep_for(10ms);
         }
         return *this;
     }
 
-    FormatType Format() const { return m_format; }
-
-  private:
-    RtAudio *m_prt = nullptr;
+    long m_latencyFrames = 0;
 
   protected:
 };
@@ -701,12 +869,32 @@ class myaudio : public RtAudio, public no_copy<myaudio>
         return nullptr;
     }
 
-    Stream OpenAndRunStream(DeviceInstance *pdeviceOut, AudioCallback *cb)
+    auto OpenStream(DeviceInstance &deviceOut, AudioCallback *cb)
     {
-        Stream s;
-        return s.OpenAndRun(*this, pdeviceOut, cb);
+        Stream s(*this, deviceOut, cb, deviceOut.Format());
+        return s;
     }
 };
+
+namespace dsp
+{
+
+[[maybe_unused]] static inline void
+fill_buffer_sine(unsigned int &nsample, const audio::StreamCallbackInfo &info,
+                 int freq = 440)
+{
+    float *out = (float *)info.outputBuffer;
+    const auto nch = info.format.Channels;
+    for (unsigned int i = 0; i < info.frames; ++i)
+    {
+        auto v = next_sine_sample(nsample, info.format.SamplesPerSec, freq);
+        for (unsigned int ch = 0; ch < nch; ++ch)
+        {
+            *out++ = v;
+        }
+    }
+}
+} // namespace dsp
 
 namespace tests
 {
