@@ -2,7 +2,9 @@
 #include "../rtAudio/RtAudio.h"
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <functional> // std::reference_wrapper
+#include <thread>
 #include <vector>
 
 namespace audio
@@ -123,6 +125,16 @@ static const RtAudioFormat RTAUDIO_FLOAT32 =
 static const RtAudioFormat RTAUDIO_FLOAT64 =
     0x20; // Normalized between plus/minus 1.0.
 /*/
+enum class AudioFormat : RtAudioFormat
+{
+    SINT8 = 0x1,
+    SINT16 = 2,
+    SINT24 = 0x4,
+    FLOAT32 = 0x10,
+    FLOAT64 = 0x20
+
+};
+
 static inline std::string formatsToString(const RtAudioFormat f)
 {
     std::string ret;
@@ -282,11 +294,8 @@ struct DeviceInstance
         assert(m_sysDevice.Host_Api());
         return m_sysDevice.Host_Api();
     }
-    const StreamOptions &streamOptions() const noexcept
-    {
-        return m_StreamOptions;
-    }
-    const StreamParameters &streamParameters(Direction direction) const noexcept
+    StreamOptions &streamOptions() noexcept { return m_StreamOptions; }
+    StreamParameters &streamParameters(Direction direction) noexcept
     {
         unsigned int index = static_cast<unsigned int>(direction);
         return m_StreamParams[index];
@@ -303,15 +312,16 @@ using ApiList = std::vector<HostApi>;
 
 struct DeviceEnumerator : public no_copy<DeviceEnumerator>
 {
-  public:
+
   public:
     DeviceEnumerator() { enum_all(); }
     DeviceEnumerator(RtAudio *prt) { enum_apis(prt); }
+
     // Care! This will invalidate any references that you may have to apis and
     // devices.
     void Refresh() { enum_all(); }
     const ApiList &apis() const noexcept { return m_apis; }
-    const SysDevList systemDevices() const noexcept { return m_sysDevs; }
+    const SysDevList &systemDevices() const noexcept { return m_sysDevs; }
 
     const HostApi *apiFromDisplayName(std::string_view name) const noexcept
     {
@@ -483,7 +493,99 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     }
 };
 
-class myaudio : private RtAudio, public no_copy<myaudio>
+struct FormatType
+{
+    AudioFormat Format;
+    unsigned int Channels;
+    unsigned int SamplesPerSec;
+    unsigned int BitsPerSample;
+};
+
+class Stream
+{
+    FormatType m_format = {};
+
+  public:
+    template <typename CB>
+    Stream OpenAndRun(RtAudio *prt, DeviceInstance *pdeviceOut,
+                      unsigned int sampleRate, const Direction dir, CB &&)
+    {
+        using namespace std;
+        using namespace chrono_literals;
+        assert(prt);
+        if (!prt)
+        {
+            throw std::runtime_error(
+                "Stream::OpenAndRun: an audio object ptr is REQUIRED");
+        }
+        assert(pdeviceOut);
+        if (!pdeviceOut)
+        {
+            throw std::runtime_error(
+                "Stream::OpenAndRun: a DeviceInstance is REQUIRED");
+        }
+
+        StreamOptions *opts = nullptr;
+        StreamParameters *inParams = nullptr;
+        StreamParameters *outParams = &pdeviceOut->streamParameters(dir);
+        if (dir == Direction::duplex)
+        {
+            inParams = &pdeviceOut->streamParameters(Direction::output);
+            if (!inParams || !inParams->isValid())
+            {
+                throw std::runtime_error("Input parameters must be set and "
+                                         "valid for a duplex stream");
+            }
+        }
+        if (!outParams || !outParams->isValid())
+        {
+            throw std::runtime_error(
+                "Output parameters must be set and valid for a duplex stream");
+        }
+        opts = &pdeviceOut->streamOptions();
+        unsigned int bufferFrames = 0;
+
+        m_format.BitsPerSample = 32;
+        m_format.Channels = outParams->nChannels;
+        m_format.Format = AudioFormat::FLOAT32;
+        m_format.SamplesPerSec = sampleRate;
+
+        auto callback = [](const void *outputBuffer, const void *inputBuffer,
+                           const unsigned int frames, const double streamTime,
+                           const RtAudioStreamStatus status,
+                           const void *userdata) {
+            (void)outputBuffer;
+            (void)inputBuffer;
+            (void)frames;
+            (void)streamTime;
+            (void)status;
+            Stream *pthis = (Stream *)userdata;
+            return 0;
+        };
+        unsigned int fmt = (unsigned int)m_format.Format;
+        prt->openStream(outParams, inParams, fmt, sampleRate, &bufferFrames,
+                        callback, this, opts);
+
+        prt->startStream();
+        unsigned int runcount = 0;
+        while (prt->isStreamRunning())
+        {
+            runcount++;
+            std::this_thread::sleep_for(10ms);
+        }
+        if (runcount == 0)
+        {
+            assert("Stream did not run!" == nullptr);
+        }
+    }
+
+    FormatType Format() const { return m_format; }
+
+  private:
+  protected:
+};
+
+class myaudio : public RtAudio, public no_copy<myaudio>
 {
     DeviceEnumerator m_enum;
     std::string m_sid;
@@ -515,6 +617,31 @@ class myaudio : private RtAudio, public no_copy<myaudio>
     {
         auto a = m_enum.findHostApi(RtAudio::getCurrentApi());
         return a;
+    }
+    const SystemDevice *DefaultOutputDevice() const
+    {
+        unsigned int devId = RtAudio::getDefaultOutputDevice();
+        for (const auto &d : m_enum.systemDevices())
+        {
+            if ((unsigned int)d.DeviceId() == devId && d.isOutput())
+            {
+                return &d;
+            }
+        }
+        return nullptr;
+    }
+
+    const SystemDevice *DefaultInputDevice() const
+    {
+        unsigned int devId = RtAudio::getDefaultInputDevice();
+        for (const auto &d : m_enum.systemDevices())
+        {
+            if ((unsigned int)d.DeviceId() == devId && d.isInput())
+            {
+                return &d;
+            }
+        }
+        return nullptr;
     }
 };
 

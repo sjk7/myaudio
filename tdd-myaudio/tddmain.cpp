@@ -8,6 +8,22 @@ using namespace std::chrono_literals;
 
 using namespace std;
 
+void test_opening_output_stream()
+{
+    audio::myaudio all_audio;
+    auto &all_enum = all_audio.enumerator();
+    auto &first_api = all_enum.apis().at(0);
+    const auto api = first_api;
+
+    audio::myaudio audio_api(api);
+    auto default_output_device = audio_api.DefaultOutputDevice();
+    assert(default_output_device);
+    auto instance = audio::DeviceInstance(*default_output_device);
+    audio::Stream stream;
+    stream.OpenAndRun(&audio_api, &instance, 44100, audio::Direction::output,
+                      []() { return 0; });
+}
+
 void test_creating_devices()
 {
     audio::myaudio audio_all;
@@ -195,6 +211,8 @@ int main()
     test_creating_devices();
 
     cout << flush;
+
+    test_opening_output_stream();
 
 #ifdef MAC
     int i = 0;

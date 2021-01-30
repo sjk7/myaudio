@@ -226,9 +226,12 @@ typedef unsigned int RtAudioStreamStatus;
    output buffer, the function should return a value of one.  To abort
    the stream immediately, the client should return a value of two.
  */
-typedef int (*RtAudioCallback)(void *outputBuffer, void *inputBuffer,
-                               unsigned int nFrames, double streamTime,
-                               RtAudioStreamStatus status, void *userData);
+typedef int (*RtAudioCallback)(const void *outputBuffer,
+                               const void *inputBuffer,
+                               const unsigned int nFrames,
+                               const double streamTime,
+                               const RtAudioStreamStatus status,
+                               const void *userData);
 
 /************************************************************************/
 /*! \class RtAudioError
@@ -559,7 +562,7 @@ class RTAUDIO_DLL_PUBLIC RtAudio
       client's responsibility to verify that a device is available
       before attempting to open a stream.
     */
-    unsigned int getDefaultOutputDevice(void);
+    unsigned int getDefaultOutputDevice(void) const;
 
     //! A function that returns the index of the default input device.
     /*!
@@ -569,7 +572,7 @@ class RTAUDIO_DLL_PUBLIC RtAudio
       client's responsibility to verify that a device is available
       before attempting to open a stream.
     */
-    unsigned int getDefaultInputDevice(void);
+    unsigned int getDefaultInputDevice(void) const;
 
     //! A public function for opening a stream with the specified parameters.
     /*!
@@ -611,9 +614,9 @@ class RTAUDIO_DLL_PUBLIC RtAudio
       dependent. \param errorCallback A client-defined function that will be
       invoked when an error has occured.
     */
-    void openStream(RtAudio::StreamParameters *outputParameters,
-                    RtAudio::StreamParameters *inputParameters,
-                    RtAudioFormat format, unsigned int sampleRate,
+    void openStream(const RtAudio::StreamParameters *outputParameters,
+                    const RtAudio::StreamParameters *inputParameters,
+                    const RtAudioFormat format, const unsigned int sampleRate,
                     unsigned int *bufferFrames, RtAudioCallback callback,
                     void *userData = NULL,
                     RtAudio::StreamOptions *options = NULL,
@@ -819,9 +822,9 @@ class RTAUDIO_DLL_PUBLIC RtApi
     virtual RtAudio::DeviceInfo getDeviceInfo(unsigned int device) = 0;
     virtual unsigned int getDefaultInputDevice(void);
     virtual unsigned int getDefaultOutputDevice(void);
-    void openStream(RtAudio::StreamParameters *outputParameters,
-                    RtAudio::StreamParameters *inputParameters,
-                    RtAudioFormat format, unsigned int sampleRate,
+    void openStream(const RtAudio::StreamParameters *outputParameters,
+                    const RtAudio::StreamParameters *inputParameters,
+                    const RtAudioFormat format, const unsigned int sampleRate,
                     unsigned int *bufferFrames, RtAudioCallback callback,
                     void *userData, RtAudio::StreamOptions *options,
                     RtAudioErrorCallback errorCallback);
@@ -993,11 +996,11 @@ inline RtAudio::DeviceInfo RtAudio ::getDeviceInfo(unsigned int device)
 {
     return rtapi_->getDeviceInfo(device);
 }
-inline unsigned int RtAudio ::getDefaultInputDevice(void)
+inline unsigned int RtAudio ::getDefaultInputDevice(void) const
 {
     return rtapi_->getDefaultInputDevice();
 }
-inline unsigned int RtAudio ::getDefaultOutputDevice(void)
+inline unsigned int RtAudio ::getDefaultOutputDevice(void) const
 {
     return rtapi_->getDefaultOutputDevice();
 }

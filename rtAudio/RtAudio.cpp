@@ -283,9 +283,10 @@ RtAudio ::~RtAudio()
     if (rtapi_) delete rtapi_;
 }
 
-void RtAudio ::openStream(RtAudio::StreamParameters *outputParameters,
-                          RtAudio::StreamParameters *inputParameters,
-                          RtAudioFormat format, unsigned int sampleRate,
+void RtAudio ::openStream(const StreamParameters *outputParameters,
+                          const StreamParameters *inputParameters,
+                          const RtAudioFormat format,
+                          const unsigned int sampleRate,
                           unsigned int *bufferFrames, RtAudioCallback callback,
                           void *userData, RtAudio::StreamOptions *options,
                           RtAudioErrorCallback errorCallback)
@@ -316,9 +317,10 @@ RtApi ::RtApi()
 
 RtApi ::~RtApi() { MUTEX_DESTROY(&stream_.mutex); }
 
-void RtApi ::openStream(RtAudio::StreamParameters *oParams,
-                        RtAudio::StreamParameters *iParams,
-                        RtAudioFormat format, unsigned int sampleRate,
+void RtApi ::openStream(const RtAudio::StreamParameters *oParams,
+                        const RtAudio::StreamParameters *iParams,
+                        const RtAudioFormat format,
+                        const unsigned int sampleRate,
                         unsigned int *bufferFrames, RtAudioCallback callback,
                         void *userData, RtAudio::StreamOptions *options,
                         RtAudioErrorCallback errorCallback)

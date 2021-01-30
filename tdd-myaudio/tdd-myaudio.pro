@@ -31,6 +31,8 @@ win32-msvc{
     DEPENDPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug
 }
 
+win32:!win32-g++:CONFIG(debug, debug|release):INCLUDEPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug: DEPENDPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug
+win32:!win32-g++:CONFIG(release, debug|release):INCLUDEPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/release: DEPENDPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Release/release
 win32-g++{
     # note: I cannot get mingw to link to COM, so it's not supported!
     LIBS +=  -lkernel32 -luuid -lole32 -loleaut32 -ldsound -luser32 -lAdvapi32
