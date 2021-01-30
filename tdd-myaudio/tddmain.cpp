@@ -18,10 +18,24 @@ void test_opening_output_stream()
     audio::myaudio audio_api(api);
     auto default_output_device = audio_api.DefaultOutputDevice();
     assert(default_output_device);
-    auto instance = audio::DeviceInstance(*default_output_device);
-    audio::Stream stream;
-    stream.OpenAndRun(&audio_api, &instance, 44100, audio::Direction::output,
-                      []() { return 0; });
+    audio::FormatType fmt = audio::defaultAudioFormat();
+    auto instance = audio::DeviceInstance(*default_output_device, fmt);
+    struct myaudiocallback : audio::AudioCallback
+    {
+        myaudiocallback(audio::DeviceInstance &devInstance)
+            : m_devInstance(devInstance)
+        {
+        }
+        int OnAudioCallback(const audio::StreamCallbackInfo &info) override
+        {
+            (void)info;
+            return 0;
+        }
+        audio::DeviceInstance &m_devInstance;
+    };
+
+    myaudiocallback mycallback(instance);
+    audio::Stream stream = audio_api.OpenAndRunStream(&instance, &mycallback);
 }
 
 void test_creating_devices()

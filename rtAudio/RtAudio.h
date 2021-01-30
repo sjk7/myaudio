@@ -296,7 +296,7 @@ class RTAUDIO_DLL_PUBLIC RtAudioError : public std::runtime_error
     \param errorText Error description.
  */
 typedef void (*RtAudioErrorCallback)(RtAudioError::Type type,
-                                     const std::string &errorText);
+                                     const std::string_view errorText);
 
 // **************************************************************** //
 //

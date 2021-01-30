@@ -114,17 +114,7 @@ struct SystemDevice
 using SysDevList = std::vector<SystemDevice>;
 using SystemDeviceRef = std::reference_wrapper<const SystemDevice>;
 using SysDevListRef = std::vector<SystemDeviceRef>;
-/*/
-     * typedef unsigned long RtAudioFormat;
-static const RtAudioFormat RTAUDIO_SINT8 = 0x1;  // 8-bit signed integer.
-static const RtAudioFormat RTAUDIO_SINT16 = 0x2; // 16-bit signed integer.
-static const RtAudioFormat RTAUDIO_SINT24 = 0x4; // 24-bit signed integer.
-static const RtAudioFormat RTAUDIO_SINT32 = 0x8; // 32-bit signed integer.
-static const RtAudioFormat RTAUDIO_FLOAT32 =
-    0x10; // Normalized between plus/minus 1.0.
-static const RtAudioFormat RTAUDIO_FLOAT64 =
-    0x20; // Normalized between plus/minus 1.0.
-/*/
+
 enum class AudioFormat : RtAudioFormat
 {
     SINT8 = 0x1,
@@ -132,8 +122,26 @@ enum class AudioFormat : RtAudioFormat
     SINT24 = 0x4,
     FLOAT32 = 0x10,
     FLOAT64 = 0x20
-
 };
+
+static inline unsigned long AudioFormatToBits(const AudioFormat &fmt)
+{
+    switch (fmt)
+    {
+    case AudioFormat::SINT8:
+        return 8;
+    case AudioFormat::SINT16:
+        return 16;
+    case AudioFormat::SINT24:
+        return 24;
+    case AudioFormat::FLOAT32:
+        return 32;
+    case AudioFormat::FLOAT64:
+        return 64;
+    default:
+        return 0;
+    }
+}
 
 static inline std::string formatsToString(const RtAudioFormat f)
 {
@@ -260,13 +268,26 @@ StreamParamsDefault(const SystemDevice &sd,
     StreamParameters ret(device_id, def_chans, first_channel);
     return ret;
 }
+struct FormatType
+{
+    AudioFormat Format;
+    unsigned int Channels;
+    unsigned int SamplesPerSec;
+    unsigned int BitsPerSample() const { return AudioFormatToBits(Format); }
+};
+
+[[maybe_unused]] static inline FormatType defaultAudioFormat()
+{
+    return FormatType{AudioFormat::FLOAT32, 2, 44100};
+}
 
 struct DeviceInstance
 {
-    DeviceInstance(const SystemDevice &sd, StreamOptions opts = {},
-                   StreamParameters inParams = {},
+    DeviceInstance(const SystemDevice &sd,
+                   FormatType fmt = defaultAudioFormat(),
+                   StreamOptions opts = {}, StreamParameters inParams = {},
                    StreamParameters outParams = {})
-        : m_sysDevice(sd), m_StreamOptions(opts)
+        : m_sysDevice(sd), m_StreamOptions(opts), m_format(fmt)
 
     {
         m_StreamParams[0] = inParams;
@@ -300,11 +321,13 @@ struct DeviceInstance
         unsigned int index = static_cast<unsigned int>(direction);
         return m_StreamParams[index];
     }
+    const FormatType &Format() const { return m_format; }
 
   private:
     const SystemDevice &m_sysDevice;
     StreamOptions m_StreamOptions = {};
     StreamParameters m_StreamParams[2] = {{}, {}};
+    FormatType m_format;
 };
 
 using ApiDevList = std::vector<DeviceInstance>;
@@ -493,30 +516,80 @@ struct DeviceEnumerator : public no_copy<DeviceEnumerator>
     }
 };
 
-struct FormatType
+enum class AudioCallbackStatus : unsigned int
 {
-    AudioFormat Format;
-    unsigned int Channels;
-    unsigned int SamplesPerSec;
-    unsigned int BitsPerSample;
+    RTAUDIO_INPUT_OVERFLOW = 0x1, // Input data was discarded because of an
+    // overflow condition at the
+    // driver.
+    RTAUDIO_OUTPUT_UNDERFLOW = 0x2 // The output buffer ran low, likely
+    // causing a gap in the output sound.
+};
+[[maybe_unused]] inline AudioCallbackStatus operator|(AudioCallbackStatus &lhs,
+                                                      AudioCallbackStatus &rhs)
+{
+    unsigned int l = (unsigned int)lhs;
+    unsigned int r = (unsigned int)rhs;
+    unsigned int ret = l | r;
+    return (AudioCallbackStatus)ret;
+}
+struct StreamCallbackInfo
+{
+    const void *outputBuffer;
+    const void *inputBuffer;
+    unsigned int frames;
+    double streamTime;
+    AudioCallbackStatus status;
+};
+
+// Override this in your own class to accept the callback
+struct AudioCallback
+{
+    virtual int OnAudioCallback(const StreamCallbackInfo &info) = 0;
 };
 
 class Stream
 {
     FormatType m_format = {};
+    static void static_error_callback(RtAudioError::Type type,
+                                      const std::string_view s)
+    {
+        std::cerr << "error_callback, with type: " << type << std::endl;
+        throw std::runtime_error(s.data());
+    }
+
+  private:
+    AudioCallback *m_pcb = nullptr;
+    static int
+    static_callback(const void *outputBuffer, const void *inputBuffer,
+                    const unsigned int frames, const double streamTime,
+                    const RtAudioStreamStatus status, const void *userdata)
+    {
+        StreamCallbackInfo info{outputBuffer, inputBuffer, frames, streamTime,
+                                AudioCallbackStatus(status)};
+
+        Stream *pthis = (Stream *)userdata;
+        return pthis->OnAudioCallback(std::forward<StreamCallbackInfo>(info));
+    };
+
+    int OnAudioCallback(StreamCallbackInfo &&info)
+    {
+        return m_pcb->OnAudioCallback(std::forward<StreamCallbackInfo>(info));
+    }
 
   public:
-    template <typename CB>
-    Stream OpenAndRun(RtAudio *prt, DeviceInstance *pdeviceOut,
-                      unsigned int sampleRate, const Direction dir, CB &&)
+    bool isRunning() const { return m_prt->isStreamRunning(); }
+    Stream OpenAndRun(RtAudio &rt, DeviceInstance *pdeviceOut,
+                      AudioCallback *cb)
     {
         using namespace std;
         using namespace chrono_literals;
-        assert(prt);
-        if (!prt)
+        m_pcb = cb;
+        m_prt = &rt;
+        assert(m_pcb);
+        if (!m_pcb)
         {
             throw std::runtime_error(
-                "Stream::OpenAndRun: an audio object ptr is REQUIRED");
+                "Stream::OpenAndRun: a callback is REQUIRED");
         }
         assert(pdeviceOut);
         if (!pdeviceOut)
@@ -527,6 +600,7 @@ class Stream
 
         StreamOptions *opts = nullptr;
         StreamParameters *inParams = nullptr;
+        const auto dir = Direction::output;
         StreamParameters *outParams = &pdeviceOut->streamParameters(dir);
         if (dir == Direction::duplex)
         {
@@ -545,43 +619,26 @@ class Stream
         opts = &pdeviceOut->streamOptions();
         unsigned int bufferFrames = 0;
 
-        m_format.BitsPerSample = 32;
-        m_format.Channels = outParams->nChannels;
-        m_format.Format = AudioFormat::FLOAT32;
-        m_format.SamplesPerSec = sampleRate;
+        m_format = pdeviceOut->Format();
 
-        auto callback = [](const void *outputBuffer, const void *inputBuffer,
-                           const unsigned int frames, const double streamTime,
-                           const RtAudioStreamStatus status,
-                           const void *userdata) {
-            (void)outputBuffer;
-            (void)inputBuffer;
-            (void)frames;
-            (void)streamTime;
-            (void)status;
-            Stream *pthis = (Stream *)userdata;
-            return 0;
-        };
         unsigned int fmt = (unsigned int)m_format.Format;
-        prt->openStream(outParams, inParams, fmt, sampleRate, &bufferFrames,
-                        callback, this, opts);
+        rt.openStream(outParams, inParams, fmt, m_format.SamplesPerSec,
+                      &bufferFrames, &static_callback, this, opts,
+                      &static_error_callback);
 
-        prt->startStream();
-        unsigned int runcount = 0;
-        while (prt->isStreamRunning())
+        rt.startStream();
+        while (rt.isStreamRunning())
         {
-            runcount++;
             std::this_thread::sleep_for(10ms);
         }
-        if (runcount == 0)
-        {
-            assert("Stream did not run!" == nullptr);
-        }
+        return *this;
     }
 
     FormatType Format() const { return m_format; }
 
   private:
+    RtAudio *m_prt = nullptr;
+
   protected:
 };
 
@@ -642,6 +699,12 @@ class myaudio : public RtAudio, public no_copy<myaudio>
             }
         }
         return nullptr;
+    }
+
+    Stream OpenAndRunStream(DeviceInstance *pdeviceOut, AudioCallback *cb)
+    {
+        Stream s;
+        return s.OpenAndRun(*this, pdeviceOut, cb);
     }
 };
 
