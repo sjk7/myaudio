@@ -177,6 +177,7 @@ AsioDriverList::AsioDriverList()
     LONG cr;
     DWORD index = 0;
     BOOL fin = FALSE;
+    (void)fin;
 
     numdrv = 0;
     lpdrvlist = 0;

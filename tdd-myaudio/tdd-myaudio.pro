@@ -20,20 +20,25 @@ else:linux: LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debu
 INCLUDEPATH += $$PWD/../rtAudio
 DEPENDPATH += $$PWD/../rtAudio
 
-win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug/release/librtAudiocpp.a
-else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug/debug/librtAudiocpp.a
-else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Release/release/rtAudiocpp.lib
-else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug/rtAudiocpp.lib
-else:linux: PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug/librtAudiocpp.a
+
+win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Release/release/rtAudiocpp.lib
+win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug/rtAudiocpp.lib
+linux: PRE_TARGETDEPS += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_GCC_64bit-Debug/librtAudiocpp.a
 
 win32-msvc{
-    LIBS += -ldsound -lole32 -luser32 -lAdvapi32
+    LIBS += -ldsound -lole32 -luser32 -lAdvapi32 -lkernel32
     INCLUDEPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug
     DEPENDPATH += $$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug
 }
 
+win32-g++{
+    # note: I cannot get mingw to link to COM, so it's not supported!
+    LIBS +=  -lkernel32 -luuid -lole32 -loleaut32 -ldsound -luser32 -lAdvapi32
+}
+
 linux{
     LIBS += -ljack -lpthread -lasound -lpulse -lpulse-simple
+
 }
 macx{
     LIBS += -framework CoreAudio -framework CoreFoundation
@@ -41,6 +46,9 @@ macx{
 
 win32-msvc:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/release/ -lrtAudiocpp
 else:win32-msvc:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/debug/ -lrtAudiocpp
+
+win32-g++:CONFIG(release, debug|release): LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MinGW_64_bit-Debugelease -lrtAudiocpp
+else:win32-g++:CONFIG(debug, debug|release): LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_MinGW_64_bit-Debug/debug -lrtAudiocpp
 
 macx:CONFIG(debug, debug|release) {
 LIBS += -L$$PWD/../build-rtAudioLib-Desktop_Qt_5_15_2_clang_64bit-Debug/ -lrtAudiocpp

@@ -24,9 +24,12 @@ contains(QT_ARCH, i386) {
     #message("64-bit")
 }
 
+
+
 win32{
    INCLUDEPATH += ../rtAudio/asio
    DEFINES -= UNICODE
+   LIBS += -lole32 -loleaut32
 
 DEFINES += __WINDOWS_DS__ \
             __RT_DUMMY__ \
@@ -58,6 +61,7 @@ SOURCES += ../rtAudio/asio/asio.cpp \
             ../rtAudio/asio/iasiothiscallresolver.cpp
 }
 
+
 HEADERS += \
     ../include/myaudio.hpp
     win32{
@@ -70,7 +74,6 @@ HEADERS += \
     ../rtAudio/asio/iasiodrv.h \
     ../rtAudio/asio/iasiothiscallresolver.h
 }
-
 
 TARGET = rtAudiocpp
 

@@ -195,12 +195,15 @@ int main()
     test_creating_devices();
 
     cout << flush;
+
+#ifdef MAC
     int i = 0;
     while (i++ < 1000)
     {
         std::this_thread::sleep_for(1000000ns);
         std::cerr << "\r";
     }
+#endif
 
     return 0;
 }
