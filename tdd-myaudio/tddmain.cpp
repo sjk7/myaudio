@@ -1,4 +1,5 @@
 #include "../include/myaudio.hpp"
+#include <algorithm> // all_of
 #include <chrono>
 #include <iostream>
 #include <set>
